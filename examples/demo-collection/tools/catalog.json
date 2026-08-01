@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "tools": [
+    {
+      "name": "example-tool",
+      "description": "Replace with real tool entries (reference-only in v1).",
+      "kind": "cli"
+    }
+  ]
+}

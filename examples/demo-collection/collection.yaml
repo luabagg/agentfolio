@@ -1,0 +1,31 @@
+name: demo
+version: 1
+
+skills:
+  backend: skills-cli
+  local: ./skills
+
+tools:
+  backend: reference
+  catalog: ./tools/catalog.json
+  apply: reference
+
+harnesses:
+  - id: pi
+    source: ./harnesses/pi
+    backend: chezmoi
+  - id: cursor
+    source: ./harnesses/cursor
+    backend: chezmoi
+
+instructions:
+  global: ./AGENTS.global.md
+  backend: chezmoi
+
+plugins:
+  backend: none
+
+# Demo destination is local so dry-run/apply never touch $HOME.
+chezmoi:
+  sourceDir: ./chezmoi
+  destinationDir: ./apply-target

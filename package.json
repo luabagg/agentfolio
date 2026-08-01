@@ -1,0 +1,48 @@
+{
+  "name": "agentfolio",
+  "version": "0.1.0",
+  "description": "Orchestrate agent collections: skills via skills-cli, harness configs via chezmoi",
+  "directories": {
+    "doc": "docs",
+    "example": "examples",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "node --test tests/**/*.test.mjs",
+    "agentfolio": "node ./bin/agentfolio.mjs"
+  },
+  "keywords": [
+    "agentfolio",
+    "agent-skills",
+    "chezmoi",
+    "skills-cli",
+    "harness",
+    "opencode",
+    "pi",
+    "cursor"
+  ],
+  "author": "",
+  "license": "MIT",
+  "type": "module",
+  "dependencies": {
+    "yaml": "^2.9.0"
+  },
+  "bin": {
+    "agentfolio": "./bin/agentfolio.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "bin",
+    "src",
+    "docs",
+    "examples",
+    "README.md",
+    "LICENSE"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/luabagg/agentfolio.git"
+  }
+}
