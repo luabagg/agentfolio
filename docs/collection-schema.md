@@ -28,6 +28,15 @@ instructions:
 plugins:
   backend: none                # list/hint only
 
+models:
+  policy: ./harnesses/catalog.yaml
+  lock: ./harnesses/catalog.lock.json
+
+integrations:
+  cursorBridge:
+    enabled: true
+    manifest: ./harnesses/pi.json
+
 chezmoi:
   sourceDir: ./chezmoi         # default ./chezmoi
   destinationDir: ~            # default $HOME; demo uses ./apply-target
@@ -41,8 +50,9 @@ chezmoi:
 | `chezmoi` | harnesses, instructions | `chezmoi apply` |
 | `reference` | tools | none (list/verify) |
 | `none` | plugins | none (hint) |
+| `models` | model catalog | `agentfolio models check|diff|refresh` |
 
-Unknown backends → validation error.
+Unknown backends → validation error for backend-bearing inventory blocks.
 
 ## Chezmoi source layout
 

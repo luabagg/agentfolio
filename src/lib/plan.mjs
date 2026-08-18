@@ -14,6 +14,23 @@ export function buildPlan(collection) {
   actions.push(...planChezmoi(collection));
 
   // Reference-only inventories (no apply command)
+  const modelsPolicyPath = resolveCollectionPath(root, doc.models?.policy ?? "./harnesses/catalog.yaml");
+  const modelsLockPath = resolveCollectionPath(root, doc.models?.lock ?? "./harnesses/catalog.lock.json");
+  if (doc.models || existsSync(modelsPolicyPath)) {
+    actions.push({
+      kind: "models.check",
+      backend: "models",
+      summary: `Validate model catalog ${doc.models?.policy ?? "./harnesses/catalog.yaml"}`,
+      command: null,
+      detail: {
+        policyPath: modelsPolicyPath,
+        lockPath: modelsLockPath,
+        policyExists: existsSync(modelsPolicyPath),
+        lockExists: existsSync(modelsLockPath),
+      },
+    });
+  }
+
   if (doc.tools?.catalog) {
     const catalogPath = resolveCollectionPath(root, doc.tools.catalog);
     actions.push({
@@ -49,7 +66,8 @@ export function buildPlan(collection) {
     skills: listSkillsInventory(collection),
     harnesses: doc.harnesses ?? [],
     instructions: doc.instructions ?? null,
-    chezmoiRequired: chezmoiAvailable() === false && actions.some((a) => a.backend === "chezmoi"),
+    chezmoiRequired: false,
+    chezmoiMissing: chezmoiAvailable() === false && actions.some((a) => a.backend === "chezmoi"),
     actions,
   };
 }
@@ -62,8 +80,8 @@ export function formatPlanText(plan) {
     lines.push("Warnings:");
     for (const w of plan.warnings) lines.push(`  - ${w}`);
   }
-  if (plan.chezmoiRequired) {
-    lines.push("ERROR: chezmoi required on PATH but not found");
+  if (plan.chezmoiMissing) {
+    lines.push("WARNING: chezmoi not found on PATH; apply/status/diff need chezmoi");
   }
   lines.push("");
   lines.push(`Actions (${plan.actions.length}):`);

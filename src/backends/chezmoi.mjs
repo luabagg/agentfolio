@@ -130,14 +130,19 @@ export function applyChezmoi(collection, { dryRun = false } = {}) {
   const results = [];
 
   if (!chezmoiAvailable()) {
+    const action = actions[0];
     return [
       {
-        kind: "chezmoi.apply",
-        backend: "chezmoi",
-        summary: "chezmoi required but not installed",
-        status: 1,
-        stderr:
-          "chezmoi not found on PATH. Install: https://www.chezmoi.io/install/",
+        ...(action ?? { kind: "chezmoi.apply", backend: "chezmoi" }),
+        summary: dryRun
+          ? "dry-run: chezmoi apply preview (chezmoi not installed)"
+          : "chezmoi required but not installed",
+        dryRun,
+        status: dryRun ? 0 : 1,
+        stdout: dryRun && action?.command ? `dry-run: ${action.command.join(" ")}` : "",
+        stderr: dryRun
+          ? ""
+          : "chezmoi not found on PATH. Install: https://www.chezmoi.io/install/",
       },
     ];
   }

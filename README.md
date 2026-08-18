@@ -50,6 +50,7 @@ agentfolio verify --collection ./examples/demo-collection
 | `diff` / `status` | Chezmoi drift against destination |
 | `apply [--dry-run]` | Apply skills then chezmoi (fail-fast) |
 | `doctor` | Check node / npx / chezmoi / skills + collection paths |
+| `models check\|diff\|refresh` | Validate, preview, or refresh model catalog locks + generated providers |
 | `verify` | Validate collection + doctor |
 
 Global flags: `--collection <path>`, `--json`, `--dry-run`, `--force`.
@@ -65,6 +66,8 @@ harnesses/               ← human-readable harness notes
 chezmoi/                 ← chezmoi source (dot_pi, dot_cursor, …)
 AGENTS.global.md         ← declared instructions (placement via chezmoi)
 tools/catalog.json       ← reference-only in v1
+harnesses/catalog.yaml   ← model selection policy
+harnesses/catalog.lock.json ← committed model discovery lock
 ```
 
 | Inventory | Backend | Apply behavior |
@@ -73,6 +76,7 @@ tools/catalog.json       ← reference-only in v1
 | harnesses / instructions | `chezmoi` | `chezmoi apply` from `chezmoi.sourceDir` |
 | tools | `reference` | list / verify only |
 | plugins | `none` | hint only |
+| models | model catalog | check / diff / refresh |
 
 See [docs/architecture.md](docs/architecture.md) and [docs/collection-schema.md](docs/collection-schema.md).
 

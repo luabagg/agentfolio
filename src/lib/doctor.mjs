@@ -31,7 +31,7 @@ export function runDoctor(collection = null) {
   checks.push({
     id: "chezmoi",
     ok: chezmoiOk,
-    required: true,
+    required: false,
     detail: chezmoiDetail,
   });
 

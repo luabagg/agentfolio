@@ -10,7 +10,7 @@ export function applyCollection(collection, { dryRun = false } = {}) {
   const plan = buildPlan(collection);
   const results = [];
 
-  if (plan.chezmoiRequired || (!chezmoiAvailable() && plan.actions.some((a) => a.backend === "chezmoi"))) {
+  if (!dryRun && (plan.chezmoiRequired || (!chezmoiAvailable() && plan.actions.some((a) => a.backend === "chezmoi")))) {
     return {
       ok: false,
       dryRun,

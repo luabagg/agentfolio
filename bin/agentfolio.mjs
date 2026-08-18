@@ -7,6 +7,7 @@ import { applyCollection, formatApplyText } from "../src/lib/apply.mjs";
 import { diffChezmoi, statusChezmoi } from "../src/backends/chezmoi.mjs";
 import { listSkillsInventory } from "../src/backends/skills-cli.mjs";
 import { initCollection } from "../src/commands/init.mjs";
+import { checkModels, formatModelsCheck, formatModelsRefresh, refreshModels } from "../src/inventories/models.mjs";
 import { resolveCollectionPath, readJsonIfExists } from "../src/lib/collection.mjs";
 import { existsSync } from "node:fs";
 
@@ -33,6 +34,7 @@ Commands:
   status                  Show chezmoi status
   apply [--dry-run]       Apply skills then chezmoi (fail-fast)
   doctor                  Check node/npx/chezmoi/skills + collection
+  models check|diff|refresh Validate/diff/refresh model catalog lock and generated targets
   verify                  Validate collection + doctor checks
   help                    Show this help
   version                 Show version
@@ -172,7 +174,7 @@ function cmdList(collection, target, flags) {
   fail(`Unknown list target: ${target}. Use skills|harnesses|tools|plugins`);
 }
 
-function main() {
+async function main() {
   const { flags, positionals } = parseArgs(process.argv.slice(2));
   const command = positionals[0] ?? "help";
 
@@ -210,7 +212,6 @@ function main() {
         } else {
           console.log(formatPlanText(plan));
         }
-        if (plan.chezmoiRequired) process.exit(1);
         return;
       }
 
@@ -258,6 +259,27 @@ function main() {
         return;
       }
 
+      case "models": {
+        const subcommand = positionals[1] ?? "check";
+        const collection = loadFromFlags(flags);
+        if (subcommand === "check") {
+          const report = await checkModels(collection);
+          if (flags.json) console.log(JSON.stringify(report, null, 2));
+          else console.log(formatModelsCheck(report));
+          if (!report.ok) process.exit(1);
+          return;
+        }
+        if (subcommand === "diff" || subcommand === "refresh") {
+          const report = await refreshModels(collection, {
+            write: subcommand === "refresh" && !flags.dryRun,
+          });
+          if (flags.json) console.log(JSON.stringify(report, null, 2));
+          else console.log(formatModelsRefresh(report));
+          return;
+        }
+        fail("Usage: agentfolio models <check|diff|refresh>");
+      }
+
       case "doctor": {
         let collection = null;
         try {
@@ -280,7 +302,7 @@ function main() {
         const collection = loadFromFlags(flags);
         const plan = buildPlan(collection);
         const doctor = runDoctor(collection);
-        const ok = doctor.ok && !plan.chezmoiRequired;
+        const ok = doctor.ok;
         if (flags.json) {
           console.log(JSON.stringify({ ok, plan, doctor }, null, 2));
         } else {

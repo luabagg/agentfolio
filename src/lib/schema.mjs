@@ -60,6 +60,14 @@ export function validateCollection(doc) {
     validatePlugins(doc.plugins, errors, warnings);
   }
 
+  if (doc.models !== undefined) {
+    validateModels(doc.models, errors, warnings);
+  }
+
+  if (doc.integrations !== undefined) {
+    validateIntegrations(doc.integrations, errors, warnings);
+  }
+
   if (doc.chezmoi !== undefined) {
     validateChezmoi(doc.chezmoi, errors, warnings);
   }
@@ -154,6 +162,30 @@ function validatePlugins(plugins, errors, warnings) {
   }
   if (plugins.backend && plugins.backend !== "none") {
     warnings.push(`plugins.backend=${plugins.backend}; recommended none (list/hint only)`);
+  }
+}
+
+function validateModels(models, errors, warnings) {
+  if (!models || typeof models !== "object" || Array.isArray(models)) {
+    errors.push("models must be a mapping");
+    return;
+  }
+  if (models.policy !== undefined && typeof models.policy !== "string") {
+    errors.push("models.policy must be a relative path string");
+  }
+  if (models.lock !== undefined && typeof models.lock !== "string") {
+    errors.push("models.lock must be a relative path string");
+  }
+}
+
+function validateIntegrations(integrations, errors, warnings) {
+  if (!integrations || typeof integrations !== "object" || Array.isArray(integrations)) {
+    errors.push("integrations must be a mapping");
+    return;
+  }
+  const cursorBridge = integrations.cursorBridge;
+  if (cursorBridge !== undefined && (typeof cursorBridge !== "object" || Array.isArray(cursorBridge))) {
+    errors.push("integrations.cursorBridge must be a mapping");
   }
 }
 
