@@ -64,4 +64,4 @@ chezmoi/
 └── dot_cursor/agents/example.md    → <dest>/.cursor/agents/example.md
 ```
 
-Harness folders under `harnesses/` are human notes / future metadata. Live file placement is the chezmoi tree.
+Harness folders under `harnesses/` hold notes and Pi sources. Chezmoi places static files. `agentfolio setup pi` applies live Pi config.

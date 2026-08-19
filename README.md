@@ -1,8 +1,10 @@
 # Agentfolio
 
-Orchestrate **agent collections**: skills via [skills-cli](https://skills.sh/), harness configs via [chezmoi](https://www.chezmoi.io/).
+Orchestrate **agent collections**: skills via [skills-cli](https://skills.sh/), files via [chezmoi](https://www.chezmoi.io/), Pi setup via local commands.
 
-A **collection** is a git-tracked directory (`collection.yaml` + skills + harness notes + chezmoi source). Agentfolio reads that inventory and runs the right backends. Live `~/.pi` / `~/.cursor` are *applied* targets — not the source of truth.
+A **collection** is a git-tracked directory. Agentfolio reads it and applies backends. Live `~/.pi` and `~/.cursor` are targets, not the source of truth.
+
+An agent may choose a profile. Agentfolio applies the change. Do not edit live config by hand.
 
 ## Install
 
@@ -46,7 +48,7 @@ agentfolio verify --collection ./examples/demo-collection
 | --- | --- |
 | `init [dir]` | Scaffold a new collection |
 | `list skills\|harnesses\|tools\|plugins` | Inventory browse |
-| `plan` | Show skills-cli + chezmoi actions |
+| `plan` | Show skills-cli, chezmoi, and model-catalog actions |
 | `diff` / `status` | Chezmoi drift against destination |
 | `apply [--dry-run] [--profile name]` | Apply a profile (`default`, `pi`, `pi-catalog`, `cursor-bridge`) |
 | `setup pi` | Pi packages, extensions, catalog, optional Cursor bridge |
@@ -78,12 +80,17 @@ harnesses/catalog.lock.json ← committed model discovery lock
 | tools | `reference` | list / verify only |
 | plugins | `none` | hint only |
 | models | model catalog | check / diff / refresh |
+| Pi setup | `setup pi` / `--profile pi*` | packages, extensions, `~/.pi`, optional Cursor bridge |
 
 See [docs/architecture.md](docs/architecture.md) and [docs/collection-schema.md](docs/collection-schema.md).
 
 ## Relation to agent-skills
 
-[`luabagg/agent-skills`](https://github.com/luabagg/agent-skills) remains the personal collection (“DB”). This repo is the **product orchestrator**. Later: migrate agent-skills to `collection.yaml` and apply it with Agentfolio.
+[`luabagg/agent-skills`](https://github.com/luabagg/agent-skills) is collection #1. It holds skills, catalog policy, and harness files.
+
+This repo is the orchestrator. Prefer Agentfolio for plan, models, and Pi apply.
+
+The `agentfolio-operator` skill in that collection chooses the profile. It does not write files itself.
 
 ## Develop
 

@@ -1,55 +1,73 @@
 # Architecture
 
-Agentfolio is a thin orchestrator over a **collection** (git-tracked inventory). It does not replace skills-cli or chezmoi.
+Agentfolio reads a collection and runs backends. It does not replace skills-cli or chezmoi.
 
 ```text
-┌─────────────────────┐
-│   collection.yaml   │  inventories + backend hints
-└─────────┬───────────┘
-          │
-          ▼
-┌─────────────────────┐
-│     agentfolio      │  plan / diff / apply / doctor / verify
-└─────┬─────────┬─────┘
-      │         │
-      ▼         ▼
- skills-cli   chezmoi
- (npx skills) (source → destination)
+collection.yaml
+      │
+      ▼
+  agentfolio
+   plan / apply / setup / models / doctor
+      │
+      ├── skills-cli
+      ├── chezmoi
+      ├── models catalog
+      └── Pi setup (extensions, settings, Cursor bridge)
 ```
+
+An agent may choose a profile. Agentfolio applies the change.
 
 ## Responsibilities
 
 | Layer | Owns |
 | --- | --- |
-| Collection repo | Source of truth: skills, harness notes, `AGENTS.global.md`, chezmoi source tree, tools catalog |
-| Agentfolio | Schema validation, inventory listing, apply plan, fail-fast orchestration, doctor/verify |
-| skills-cli | Install / update / list skills |
-| chezmoi | Place harness + instruction files onto disk (git-friendly diff/apply) |
+| Collection repo | Skills, manifests, catalog policy, chezmoi source, instructions |
+| Agentfolio | Validate, plan, apply, doctor, model lock, Pi setup |
+| skills-cli | Install and list skills |
+| chezmoi | Place files on disk |
+| Operator skill | Choose the profile. Do not edit live files by hand |
 
-## Apply order
+## Profiles
 
-1. Validate `collection.yaml`
-2. Apply **skills** (`skills-cli`) when `skills.local` is set
-3. Apply **chezmoi** when harnesses/instructions/chezmoi source exist
-4. Tools / plugins never auto-install (reference / hint only)
+| Profile | Action |
+| --- | --- |
+| `default` | skills-cli, then chezmoi |
+| `pi` | Pi packages, extensions, catalog, optional Cursor bridge |
+| `pi-catalog` | Lock, Scope models, filtered providers |
+| `cursor-bridge` | Cursor ACP bridge only |
 
-Fail-fast: first non-zero backend stops the run.
+Use `--dry-run` first.
+
+## Default apply order
+
+1. Validate `collection.yaml`.
+2. Apply local skills when `skills.local` exists.
+3. Apply chezmoi when harness or instruction files exist.
+4. Do not install tools or plugins.
+
+Pi profiles skip skills and chezmoi. They write `~/.pi` files instead.
+
+Fail-fast: the first failed action stops the run.
 
 ## Extensibility
 
-`KNOWN_BACKENDS` in `src/lib/schema.mjs` is the allowlist. New inventories or backends plug in by:
+`KNOWN_BACKENDS` in `src/lib/schema.mjs` is the allowlist.
 
-1. Extending schema validation
-2. Adding a backend module under `src/backends/`
-3. Wiring into `buildPlan` / `applyCollection`
+To add a backend:
 
-Unknown backends fail at validate/plan — no silent no-ops.
+1. Extend schema validation.
+2. Add a module under `src/backends/` or `src/harnesses/`.
+3. Wire it into plan or apply.
+
+Unknown backends fail at validate or plan.
 
 ## Destination safety
 
-- Default chezmoi destination: `$HOME` (omit `chezmoi.destinationDir`)
-- Demo collection sets `destinationDir: ./apply-target` so dry-run/apply never touch the real home
-- Always `agentfolio apply --dry-run` before first real apply against `$HOME`
+Default chezmoi destination is `$HOME`.
+
+The demo collection uses `destinationDir: ./apply-target`.
+
+Run `agentfolio apply --dry-run` before a real apply to `$HOME`.
 
 ## Collection discovery
 
