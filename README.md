@@ -48,12 +48,13 @@ agentfolio verify --collection ./examples/demo-collection
 | `list skills\|harnesses\|tools\|plugins` | Inventory browse |
 | `plan` | Show skills-cli + chezmoi actions |
 | `diff` / `status` | Chezmoi drift against destination |
-| `apply [--dry-run]` | Apply skills then chezmoi (fail-fast) |
+| `apply [--dry-run] [--profile name]` | Apply a profile (`default`, `pi`, `pi-catalog`, `cursor-bridge`) |
+| `setup pi` | Pi packages, extensions, catalog, optional Cursor bridge |
 | `doctor` | Check node / npx / chezmoi / skills + collection paths |
 | `models check\|diff\|refresh` | Validate, preview, or refresh model catalog locks + generated providers |
 | `verify` | Validate collection + doctor |
 
-Global flags: `--collection <path>`, `--json`, `--dry-run`, `--force`.
+Global flags: `--collection <path>`, `--json`, `--dry-run`, `--force`, `--profile`, `--catalog-only`, `--skip-cursor-bridge`.
 
 Collection discovery: `--collection`, else `AGENTFOLIO_COLLECTION`, else walk up from cwd for `collection.yaml`.
 

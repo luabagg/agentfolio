@@ -80,3 +80,16 @@ test("unknown command exits non-zero", () => {
   const result = run(["not-a-command"]);
   assert.notEqual(result.status, 0);
 });
+
+test("unknown apply profile exits non-zero", () => {
+  const result = run(["apply", "--profile", "nope", "--collection", demoRoot]);
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /Unknown profile/);
+});
+
+test("help lists setup and profiles", () => {
+  const result = run(["help"]);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /setup pi/);
+  assert.match(result.stdout, /--profile/);
+});

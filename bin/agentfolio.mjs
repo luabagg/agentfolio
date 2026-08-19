@@ -7,6 +7,7 @@ import { applyCollection, formatApplyText } from "../src/lib/apply.mjs";
 import { diffChezmoi, statusChezmoi } from "../src/backends/chezmoi.mjs";
 import { listSkillsInventory } from "../src/backends/skills-cli.mjs";
 import { initCollection } from "../src/commands/init.mjs";
+import { formatPiSetupText, PI_PROFILES, setupPi } from "../src/harnesses/pi.mjs";
 import { checkModels, formatModelsCheck, formatModelsRefresh, refreshModels } from "../src/inventories/models.mjs";
 import { resolveCollectionPath, readJsonIfExists } from "../src/lib/collection.mjs";
 import { existsSync } from "node:fs";
@@ -32,7 +33,10 @@ Commands:
   plan                    Show apply plan (skills-cli + chezmoi)
   diff                    Show chezmoi diff against destination
   status                  Show chezmoi status
-  apply [--dry-run]       Apply skills then chezmoi (fail-fast)
+  apply [--dry-run] [--profile <name>]
+                          Apply a profile (default: skills + chezmoi)
+  setup pi [--catalog-only] [--skip-cursor-bridge]
+                          Apply Pi packages, extensions, catalog, optional Cursor bridge
   doctor                  Check node/npx/chezmoi/skills + collection
   models check|diff|refresh Validate/diff/refresh model catalog lock and generated targets
   verify                  Validate collection + doctor checks
@@ -44,6 +48,9 @@ Global options:
   --json                  Machine-readable JSON where supported
   --dry-run               Preview apply without writing
   --force                 Overwrite scaffold files on init
+  --profile <name>        default | pi | pi-catalog | cursor-bridge
+  --catalog-only          Pi catalog/settings/models only
+  --skip-cursor-bridge    Skip Cursor ACP bridge during Pi setup
 
 Examples:
   agentfolio init ./my-collection
@@ -60,6 +67,9 @@ function parseArgs(argv) {
     json: false,
     dryRun: false,
     force: false,
+    profile: "default",
+    catalogOnly: false,
+    skipCursorBridge: false,
   };
   const positionals = [];
 
@@ -84,6 +94,23 @@ function parseArgs(argv) {
     }
     if (token === "--force") {
       flags.force = true;
+      continue;
+    }
+    if (token === "--profile") {
+      flags.profile = args.shift();
+      if (!flags.profile) fail("--profile requires a name");
+      continue;
+    }
+    if (token.startsWith("--profile=")) {
+      flags.profile = token.slice("--profile=".length);
+      continue;
+    }
+    if (token === "--catalog-only") {
+      flags.catalogOnly = true;
+      continue;
+    }
+    if (token === "--skip-cursor-bridge") {
+      flags.skipCursorBridge = true;
       continue;
     }
     if (token === "--help" || token === "-h") {
@@ -249,12 +276,41 @@ async function main() {
 
       case "apply": {
         const collection = loadFromFlags(flags);
+        const profile = PI_PROFILES[flags.profile];
+        if (!profile) fail(`Unknown profile: ${flags.profile}. Use ${Object.keys(PI_PROFILES).join(" | ")}`);
+        if (profile.pi) {
+          const report = await setupPi(collection, {
+            dryRun: flags.dryRun,
+            catalogOnly: profile.catalogOnly || flags.catalogOnly,
+            skipCursorBridge: profile.skipCursorBridge || flags.skipCursorBridge,
+            bridgeOnly: profile.bridgeOnly,
+          });
+          if (flags.json) console.log(JSON.stringify(report, null, 2));
+          else console.log(formatPiSetupText(report));
+          if (!report.ok) process.exit(1);
+          return;
+        }
         const report = applyCollection(collection, { dryRun: flags.dryRun });
         if (flags.json) {
           console.log(JSON.stringify(report, null, 2));
         } else {
           console.log(formatApplyText(report));
         }
+        if (!report.ok) process.exit(1);
+        return;
+      }
+
+      case "setup": {
+        const target = positionals[1];
+        if (target !== "pi") fail("Usage: agentfolio setup pi [--catalog-only] [--skip-cursor-bridge] [--dry-run]");
+        const collection = loadFromFlags(flags);
+        const report = await setupPi(collection, {
+          dryRun: flags.dryRun,
+          catalogOnly: flags.catalogOnly,
+          skipCursorBridge: flags.skipCursorBridge,
+        });
+        if (flags.json) console.log(JSON.stringify(report, null, 2));
+        else console.log(formatPiSetupText(report));
         if (!report.ok) process.exit(1);
         return;
       }
