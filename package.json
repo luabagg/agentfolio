@@ -9,7 +9,10 @@
   },
   "scripts": {
     "test": "node --test tests/**/*.test.mjs",
-    "agentfolio": "node ./bin/agentfolio.mjs"
+    "agentfolio": "node ./bin/agentfolio.mjs",
+    "check:dependencies": "node scripts/check-dependencies.mjs",
+    "check:secrets": "node scripts/secret-scan.mjs",
+    "package:smoke": "node --test tests/package-smoke.test.mjs"
   },
   "keywords": [
     "agentfolio",

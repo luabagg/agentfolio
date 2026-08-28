@@ -27,3 +27,7 @@ Task 5: complete (commit 75aa2aa, tests node --test tests/demo-adapter.test.mjs 
 Task 6: complete (commit 725d822, tests node --test tests/cli.test.mjs)
 
 Ruling: static target-name scans exclude docs/superpowers because the binding retained plan/spec explicitly quote excluded names as requirements; public documentation and source are covered by the same scan. Regression coverage: CLI help assertions reject target-specific terms.
+
+Task 7: complete (commit 62c946d, tests node --test tests/scripts.test.mjs && npm run check:dependencies && npm run check:secrets && npm run package:smoke)
+
+Ruling: dependency-policy lifecycle diagnostic remains the plan's exact `is disallowed` message; its regression assertion checks that required wording rather than the contradictory `lifecycle` substring.
