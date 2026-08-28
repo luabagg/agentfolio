@@ -4,7 +4,7 @@ import { formatCommandResult, npx, runCommand } from "../lib/run.mjs";
 
 /**
  * Plan skills-cli actions for a collection.
- * @returns {Array<{ kind: string, backend: string, summary: string, command?: string[], detail?: object }>}
+ * @returns {Array<{ kind: string, executor: string, summary: string, command?: string[], detail?: object }>}
  */
 export function planSkills(collection) {
   const { root, doc } = collection;
@@ -16,12 +16,26 @@ export function planSkills(collection) {
   const localSkills = skills.local ? listLocalSkills(root, skills.local) : [];
 
   if (skills.local) {
+    const scope = skills.scope ?? "global";
+    const agents = skills.agents ?? ["*"];
+    const command = [npx, "--yes", "skills", "add", local ?? skills.local];
+    if (scope === "global") command.push("--global");
+    for (const agent of agents) command.push("--agent", agent);
+    command.push("--skill", "*", "--yes");
+    if (skills.copy) command.push("--copy");
+
     actions.push({
       kind: "skills.local",
-      backend: "skills-cli",
+      executor: "skills-cli",
       summary: `Install ${localSkills.length} local skill(s) from ${skills.local}`,
-      command: [npx, "--yes", "skills", "add", local ?? skills.local, "--skill", "*", "-g", "-y"],
-      detail: { path: local, skills: localSkills.map((s) => s.id) },
+      command,
+      detail: {
+        path: local,
+        skills: localSkills.map((skill) => skill.id),
+        scope,
+        agents,
+        copy: Boolean(skills.copy),
+      },
     });
   }
 
@@ -29,7 +43,7 @@ export function planSkills(collection) {
     const importsPath = resolveCollectionPath(root, skills.imports);
     actions.push({
       kind: "skills.imports",
-      backend: "skills-cli",
+      executor: "skills-cli",
       summary: `Apply skill imports from ${skills.imports}`,
       command: null,
       detail: {
@@ -56,7 +70,7 @@ export function listSkillsInventory(collection) {
 /**
  * Apply local skills via skills-cli.
  */
-export function applySkills(collection, { dryRun = false } = {}) {
+export function applySkills(collection, { dryRun = false, projectRoot = process.cwd() } = {}) {
   const actions = planSkills(collection).filter((a) => a.command);
   const results = [];
 
@@ -71,7 +85,8 @@ export function applySkills(collection, { dryRun = false } = {}) {
       continue;
     }
 
-    const result = formatCommandResult(runCommand(action.command, { cwd: collection.root }));
+    const cwd = action.detail.scope === "project" ? projectRoot : collection.root;
+    const result = formatCommandResult(runCommand(action.command, { cwd }));
     results.push({ ...action, ...result });
     if (result.status !== 0) break;
   }

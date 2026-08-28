@@ -1,76 +1,70 @@
 # Architecture
 
-Agentfolio reads a collection and runs backends. It does not replace skills-cli or chezmoi.
+Agentfolio is a harness-agnostic workflow orchestrator.
 
 ```text
 collection.yaml
-      │
-      ▼
-  agentfolio
-   plan / apply / setup / models / doctor
-      │
-      ├── skills-cli
-      ├── chezmoi
-      ├── models catalog
-      └── Pi setup (extensions, settings, Cursor bridge)
+      |
+      v
+  Agentfolio
+  validate / profiles / ordered plan / apply / doctor
+      |
+      +-- Skills CLI (native)
+      `-- collection-owned adapters (JSON over stdin/stdout)
 ```
 
-An agent may choose a profile. Agentfolio applies the change.
+## Ownership
 
-## Responsibilities
-
-| Layer | Owns |
+| Owner | Responsibilities |
 | --- | --- |
-| Collection repo | Skills, manifests, catalog policy, chezmoi source, instructions |
-| Agentfolio | Validate, plan, apply, doctor, model lock, Pi setup |
-| skills-cli | Install and list skills |
-| chezmoi | Place files on disk |
-| Operator skill | Choose the profile. Do not edit live files by hand |
+| Agentfolio | Collection discovery, schema, profile selection, action ordering, dry-run, adapter protocol, native skills |
+| Collection | Harness IDs, action names and payloads, adapter implementations, tool references |
+| Adapter | Plugins, agents, instructions, models, providers, services, paths, platform-specific behavior |
+
+Core source must not contain harness names, provider implementations, model catalogs, bridges, service units, or home-directory targets.
+
+## Harness workflows
+
+Harnesses are mappings with ordered actions:
+
+```yaml
+harnesses:
+  terminal:
+    adapter: team
+    actions:
+      - action: add-plugin
+        source: example-plugin
+      - action: add-agents
+        source: ./agents
+```
+
+Action names and payloads are opaque to Agentfolio. The selected adapter receives each action through the protocol and decides what it means.
+
+## Adapter boundary
+
+Adapters are collection-owned argv commands:
+
+```yaml
+adapters:
+  team:
+    command: [node, ./scripts/agentfolio-adapter.mjs]
+    timeout: 120000
+```
+
+Agentfolio runs adapters without a shell from the collection root. Requests and responses are protocol-v1 JSON. `plan` must not mutate; `apply` honors `dryRun`; `doctor` returns structured checks.
 
 ## Profiles
 
-| Profile | Action |
-| --- | --- |
-| `default` | skills-cli, then chezmoi |
-| `pi` | Pi packages, extensions, catalog, optional Cursor bridge |
-| `pi-catalog` | Lock, Scope models, filtered providers |
-| `cursor-bridge` | Cursor ACP bridge only |
+Profiles select native skills and harness IDs:
 
-Use `--dry-run` first.
+```yaml
+profiles:
+  workstation:
+    skills: true
+    harnesses: [terminal, editor]
+  skills:
+    skills: true
+    harnesses: []
+```
 
-## Default apply order
-
-1. Validate `collection.yaml`.
-2. Apply local skills when `skills.local` exists.
-3. Apply chezmoi when harness or instruction files exist.
-4. Do not install tools or plugins.
-
-Pi profiles skip skills and chezmoi. They write `~/.pi` files instead.
-
-Fail-fast: the first failed action stops the run.
-
-## Extensibility
-
-`KNOWN_BACKENDS` in `src/lib/schema.mjs` is the allowlist.
-
-To add a backend:
-
-1. Extend schema validation.
-2. Add a module under `src/backends/` or `src/harnesses/`.
-3. Wire it into plan or apply.
-
-Unknown backends fail at validate or plan.
-
-## Destination safety
-
-Default chezmoi destination is `$HOME`.
-
-The demo collection uses `destinationDir: ./apply-target`.
-
-Run `agentfolio apply --dry-run` before a real apply to `$HOME`.
-
-## Collection discovery
-
-1. `--collection <path>`
-2. `AGENTFOLIO_COLLECTION`
-3. Walk up from cwd for `collection.yaml`
+An implicit default selects declared skills and all declared harnesses. `"*"` expands to every harness. Unknown IDs fail validation.

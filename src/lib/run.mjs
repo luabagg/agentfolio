@@ -7,9 +7,17 @@ function windowsQuote(value) {
   return `"${String(value).replaceAll('"', '\\"')}"`;
 }
 
-/**
- * Run a command with argv array (no shell). Returns spawnSync result.
- */
+/** Run a literal argv command without a shell on every platform. */
+export function runArgv(command, options = {}) {
+  const opts = {
+    encoding: "utf8",
+    stdio: ["ignore", "pipe", "pipe"],
+    ...options,
+  };
+  return spawnSync(command[0], command.slice(1), opts);
+}
+
+/** Run commands that may be Windows .cmd shims, such as npx. */
 export function runCommand(command, options = {}) {
   const opts = {
     encoding: "utf8",
@@ -18,7 +26,7 @@ export function runCommand(command, options = {}) {
   };
 
   if (process.platform !== "win32") {
-    return spawnSync(command[0], command.slice(1), opts);
+    return runArgv(command, opts);
   }
 
   const commandLine = command.map(windowsQuote).join(" ");

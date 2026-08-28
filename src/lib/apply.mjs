@@ -1,47 +1,73 @@
 import { applySkills } from "../backends/skills-cli.mjs";
-import { applyChezmoi, chezmoiAvailable } from "../backends/chezmoi.mjs";
+import { adapterRequest, runAdapter } from "./adapters.mjs";
 import { buildPlan } from "./plan.mjs";
 
-/**
- * Apply a collection: skills-cli then chezmoi.
- * Fail-fast on first non-zero backend result.
- */
-export function applyCollection(collection, { dryRun = false } = {}) {
-  const plan = buildPlan(collection);
+/** Apply native skills and collection-owned harness actions in plan order. */
+export function applyCollection(
+  collection,
+  { dryRun = false, profile = "default", projectRoot = process.cwd() } = {},
+) {
+  const plan = buildPlan(collection, { profile });
   const results = [];
+  let skillsApplied = false;
 
-  if (!dryRun && (plan.chezmoiRequired || (!chezmoiAvailable() && plan.actions.some((a) => a.backend === "chezmoi")))) {
-    return {
-      ok: false,
-      dryRun,
-      results: [
-        {
-          kind: "chezmoi.apply",
-          backend: "chezmoi",
-          summary: "chezmoi required but not installed",
-          status: 1,
-          stderr:
-            "chezmoi not found on PATH. Install: https://www.chezmoi.io/install/",
-        },
-      ],
-    };
+  for (const action of plan.actions) {
+    if (action.executor === "skills-cli") {
+      if (skillsApplied || !action.command) continue;
+      skillsApplied = true;
+      const skillResults = applySkills(collection, { dryRun, projectRoot });
+      results.push(...skillResults);
+      if (skillResults.some((result) => result.status !== 0)) {
+        return { ok: false, dryRun, profile: plan.profile.name, results };
+      }
+      continue;
+    }
+
+    if (action.executor !== "adapter") continue;
+    const request = adapterRequest(
+      collection,
+      "apply",
+      action.harness,
+      { index: action.index, config: action.config },
+      { dryRun },
+    );
+    try {
+      const response = runAdapter(collection, action.adapter, request);
+      const result = {
+        ...response,
+        kind: action.kind,
+        executor: "adapter",
+        adapter: action.adapter,
+        harness: action.harness,
+        action: action.action,
+        summary: response.summary ?? action.summary,
+        command: response.command ?? action.command,
+        status: response.status ?? 0,
+        dryRun,
+      };
+      if (response.changed === undefined) delete result.changed;
+      results.push(result);
+      if (result.status !== 0) {
+        return { ok: false, dryRun, profile: plan.profile.name, results };
+      }
+    } catch (error) {
+      results.push({
+        kind: action.kind,
+        executor: "adapter",
+        adapter: action.adapter,
+        harness: action.harness,
+        action: action.action,
+        summary: action.summary,
+        command: action.command,
+        status: 1,
+        dryRun,
+        stderr: error.message,
+      });
+      return { ok: false, dryRun, profile: plan.profile.name, results };
+    }
   }
 
-  const skillResults = applySkills(collection, { dryRun });
-  results.push(...skillResults);
-  const skillFail = skillResults.find((r) => r.status !== 0);
-  if (skillFail) {
-    return { ok: false, dryRun, results };
-  }
-
-  const chezmoiResults = applyChezmoi(collection, { dryRun });
-  results.push(...chezmoiResults);
-  const chezmoiFail = chezmoiResults.find((r) => r.status !== 0);
-  if (chezmoiFail) {
-    return { ok: false, dryRun, results };
-  }
-
-  return { ok: true, dryRun, results };
+  return { ok: true, dryRun, profile: plan.profile.name, results };
 }
 
 export function formatApplyText(report) {
@@ -49,19 +75,18 @@ export function formatApplyText(report) {
     `Apply: ${report.ok ? "OK" : "FAIL"}${report.dryRun ? " (dry-run)" : ""}`,
     "",
   ];
-  for (const [i, r] of report.results.entries()) {
-    const mark = r.status === 0 ? "ok" : "FAIL";
-    lines.push(`${i + 1}. [${mark}] [${r.backend}] ${r.summary}`);
-    if (r.command) lines.push(`   $ ${r.command.join(" ")}`);
-    if (r.stdout?.trim()) {
-      for (const line of r.stdout.trim().split("\n").slice(0, 20)) {
-        lines.push(`   | ${line}`);
-      }
+  for (const [index, result] of report.results.entries()) {
+    const mark = result.status === 0 ? "ok" : "FAIL";
+    const owner = result.executor === "adapter"
+      ? `${result.harness}:${result.action}`
+      : result.executor;
+    lines.push(`${index + 1}. [${mark}] [${owner}] ${result.summary}`);
+    if (result.command) lines.push(`   $ ${result.command.join(" ")}`);
+    if (result.stdout?.trim()) {
+      for (const line of result.stdout.trim().split("\n").slice(0, 20)) lines.push(`   | ${line}`);
     }
-    if (r.stderr?.trim() && r.status !== 0) {
-      for (const line of r.stderr.trim().split("\n").slice(0, 20)) {
-        lines.push(`   ! ${line}`);
-      }
+    if (result.stderr?.trim() && result.status !== 0) {
+      for (const line of result.stderr.trim().split("\n").slice(0, 20)) lines.push(`   ! ${line}`);
     }
   }
   if (!report.results.length) lines.push("(no apply actions)");

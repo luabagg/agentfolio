@@ -1,67 +1,90 @@
-# collection.yaml schema (v1)
+# Collection Schema v1
 
-Root mapping. `name` and `version` required. `version` must be `1`.
+`collection.yaml` is a mapping. `name` and `version: 1` are required.
+
+## Skills
 
 ```yaml
-name: my-collection
-version: 1
-
 skills:
-  backend: skills-cli          # required when skills present
-  local: ./skills              # optional relative path
-  imports: ./imports           # optional; plan/verify only in v1
+  local: ./skills
+  imports: ./imports       # optional reference inventory
+  scope: global            # global or project; default global
+  agents: ["*"]            # optional; default every agent
+  copy: false              # optional; default symlinks
+```
 
-tools:
-  backend: reference
-  catalog: ./tools/catalog.json
-  apply: reference             # only "reference" supported
+The repository remains directly installable:
 
+```bash
+npx skills add <owner>/<repository> --all
+```
+
+## Adapters
+
+```yaml
+adapters:
+  local:
+    command: [node, ./scripts/agentfolio-adapter.mjs]
+    timeout: 120000        # optional milliseconds
+```
+
+Commands are non-empty argv arrays and run without a shell from the collection root. Adapter IDs are collection-defined.
+
+## Harnesses
+
+```yaml
 harnesses:
-  - id: pi                     # unique
-    source: ./harnesses/pi
-    backend: chezmoi
-
-instructions:
-  global: ./AGENTS.global.md
-  backend: chezmoi
-
-plugins:
-  backend: none                # list/hint only
-
-models:
-  policy: ./harnesses/catalog.yaml
-  lock: ./harnesses/catalog.lock.json
-
-integrations:
-  cursorBridge:
-    enabled: true
-    manifest: ./harnesses/pi.json
-
-chezmoi:
-  sourceDir: ./chezmoi         # default ./chezmoi
-  destinationDir: ~            # default $HOME; demo uses ./apply-target
+  terminal:
+    adapter: local
+    actions:
+      - action: add-plugin
+        source: example-plugin
+        enabled: true
+      - action: add-agents
+        source: ./harnesses/terminal/agents
 ```
 
-## Known backends
+`harnesses` is a mapping. Each harness references a declared adapter and has a non-empty ordered `actions` array. Every action requires a non-empty `action` string; optional `summary` must be a string. All other action fields are passed unchanged to the adapter.
 
-| Backend | Used for | Apply |
-| --- | --- | --- |
-| `skills-cli` | skills | `npx --yes skills add …` |
-| `chezmoi` | harnesses, instructions | `chezmoi apply` |
-| `reference` | tools | none (list/verify) |
-| `none` | plugins | none (hint) |
-| `models` | model catalog | `agentfolio models check|diff|refresh` |
+## Profiles
 
-Unknown backends → validation error for backend-bearing inventory blocks.
-
-## Chezmoi source layout
-
-Under `chezmoi.sourceDir`, chezmoi maps `dot_*` prefixes to hidden dirs in the destination:
-
-```text
-chezmoi/
-├── dot_pi/agent/AGENTS.md          → <dest>/.pi/agent/AGENTS.md
-└── dot_cursor/agents/example.md    → <dest>/.cursor/agents/example.md
+```yaml
+profiles:
+  default:
+    skills: true
+    harnesses: [terminal]
+  everything:
+    skills: true
+    harnesses: ["*"]
+  skills:
+    skills: true
+    harnesses: []
 ```
 
-Harness folders under `harnesses/` hold notes and Pi sources. Chezmoi places static files. `agentfolio setup pi` applies live Pi config.
+An omitted profile defaults `skills` from whether the collection declares skills and selects every harness. An omitted `profiles` mapping provides the same implicit `default` profile.
+
+## Adapter protocol
+
+Agentfolio writes one request object to stdin for `plan`, `apply`, or `doctor`. The adapter writes exactly one response object to stdout and diagnostics to stderr.
+
+```json
+{
+  "protocolVersion": 1,
+  "operation": "apply",
+  "dryRun": true,
+  "collection": { "name": "team", "version": 1, "root": "/absolute/path" },
+  "harness": { "id": "terminal", "actions": [] },
+  "action": { "index": 0, "name": "add-plugin", "config": {} }
+}
+```
+
+Plan/apply responses require `ok` and may return `summary`, `status`, `changed`, `command`, `detail`, `stdout`, and `stderr`. Doctor returns `ok` plus `checks` entries containing `id`, `ok`, `required`, and `detail`.
+
+## Tools
+
+```yaml
+tools:
+  catalog: ./tools/catalog.json
+```
+
+Tools are reference-only. Harness-specific instructions, plugins, models, providers, and integrations belong in action payloads interpreted by collection adapters.

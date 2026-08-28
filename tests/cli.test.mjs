@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync, existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,6 +10,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = join(here, "..");
 const bin = join(repoRoot, "bin", "agentfolio.mjs");
 const demoRoot = join(repoRoot, "examples", "demo-collection");
+const fixtureAdapter = join(here, "fixtures", "harness-adapter.mjs");
 const node = process.execPath;
 
 function run(args, options = {}) {
@@ -20,11 +21,30 @@ function run(args, options = {}) {
   });
 }
 
-test("help exits 0", () => {
+function makeHarnessCollection(command = [node, fixtureAdapter]) {
+  const root = mkdtempSync(join(tmpdir(), "agentfolio-cli-harness-"));
+  writeFileSync(join(root, "collection.yaml"), JSON.stringify({
+    name: "adapter-demo",
+    version: 1,
+    adapters: { local: { command } },
+    harnesses: {
+      terminal: {
+        adapter: "local",
+        actions: [{ action: "add-agents", summary: "Install terminal agents" }],
+      },
+    },
+    profiles: { default: { skills: false, harnesses: ["terminal"] } },
+  }));
+  return root;
+}
+
+test("help describes harness workflow commands", () => {
   const result = run(["help"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout, /agentfolio/);
-  assert.match(result.stdout, /plan/);
+  assert.match(result.stdout, /--profile <name>/);
+  assert.match(result.stdout, /harness/i);
+  assert.doesNotMatch(result.stdout, /setup pi|models check|catalog-only|cursor-bridge|chezmoi|\bdiff\b|\bstatus\b/i);
 });
 
 test("version prints semver", () => {
@@ -33,18 +53,65 @@ test("version prints semver", () => {
   assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
 });
 
-test("plan against demo collection", () => {
+test("plan against skills-only demo collection", () => {
   const result = run(["plan", "--collection", demoRoot]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Collection: demo/);
   assert.match(result.stdout, /skills-cli/);
-  assert.match(result.stdout, /chezmoi/);
+  assert.doesNotMatch(result.stdout, /chezmoi/);
 });
 
-test("verify against demo collection", () => {
-  const result = run(["verify", "--collection", demoRoot]);
+test("plan accepts collection-defined profile", () => {
+  const result = run(["plan", "--profile", "skills", "--collection", demoRoot, "--json"]);
+  assert.equal(result.status, 0, result.stderr);
+  const plan = JSON.parse(result.stdout);
+  assert.deepEqual(plan.profile, { name: "skills", skills: true, harnesses: [] });
+  assert.ok(plan.actions.every((action) => action.executor === "skills-cli"));
+});
+
+test("list harnesses reports mapping ids and actions", () => {
+  const root = makeHarnessCollection();
+  try {
+    const result = run(["list", "harnesses", "--collection", root, "--json"]);
+    assert.equal(result.status, 0, result.stderr);
+    const harnesses = JSON.parse(result.stdout);
+    assert.equal(harnesses.terminal.adapter, "local");
+    assert.equal(harnesses.terminal.actions[0].action, "add-agents");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("verify invokes selected adapter doctor", () => {
+  const root = makeHarnessCollection();
+  try {
+    const result = run(["verify", "--collection", root]);
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(result.stdout, /adapter\.local\.fixture/);
+    assert.match(result.stdout, /Verify: OK/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("verify checks only dependencies selected by profile", () => {
+  const result = run(["verify", "--profile", "catalog", "--collection", demoRoot], {
+    env: { PATH: "" },
+  });
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Verify: OK/);
+  assert.doesNotMatch(result.stdout, /skills-cli:|npx:|adapter\./);
+});
+
+test("doctor fails when selected adapter executable is missing", () => {
+  const root = makeHarnessCollection(["definitely-missing-agentfolio-adapter"]);
+  try {
+    const result = run(["doctor", "--collection", root]);
+    assert.notEqual(result.status, 0);
+    assert.match(result.stdout, /\[FAIL\] adapter\.local\.command/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("list skills --json", () => {
@@ -54,23 +121,38 @@ test("list skills --json", () => {
   assert.equal(data.local[0].id, "hello-skill");
 });
 
-test("apply --dry-run against demo (local destination)", () => {
+test("apply --dry-run against demo", () => {
   const result = run(["apply", "--dry-run", "--collection", demoRoot]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Apply: OK \(dry-run\)/);
 });
 
-test("init scaffolds a new collection", () => {
+test("apply --dry-run invokes adapter", () => {
+  const root = makeHarnessCollection();
+  try {
+    const result = run(["apply", "--dry-run", "--collection", root, "--json"]);
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    assert.equal(report.profile, "default");
+    assert.equal(report.results[0].executor, "adapter");
+    assert.equal(report.results[0].dryRun, true);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("init scaffolds a neutral Skills CLI collection", () => {
   const dir = mkdtempSync(join(tmpdir(), "agentfolio-init-"));
   try {
     const result = run(["init", dir]);
     assert.equal(result.status, 0, result.stderr);
     assert.ok(existsSync(join(dir, "collection.yaml")));
     assert.ok(existsSync(join(dir, "skills", "hello-skill", "SKILL.md")));
-    assert.ok(existsSync(join(dir, "chezmoi", "dot_pi", "agent", "AGENTS.md")));
+    assert.equal(existsSync(join(dir, "harnesses")), false);
+    assert.equal(existsSync(join(dir, "chezmoi")), false);
     const yaml = readFileSync(join(dir, "collection.yaml"), "utf8");
-    assert.match(yaml, /backend: skills-cli/);
-    assert.match(yaml, /backend: chezmoi/);
+    assert.match(yaml, /skills:/);
+    assert.doesNotMatch(yaml, /backend:|pi|cursor|chezmoi/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
@@ -81,15 +163,8 @@ test("unknown command exits non-zero", () => {
   assert.notEqual(result.status, 0);
 });
 
-test("unknown apply profile exits non-zero", () => {
+test("unknown profile exits non-zero", () => {
   const result = run(["apply", "--profile", "nope", "--collection", demoRoot]);
   assert.notEqual(result.status, 0);
   assert.match(result.stderr, /Unknown profile/);
-});
-
-test("help lists setup and profiles", () => {
-  const result = run(["help"]);
-  assert.equal(result.status, 0);
-  assert.match(result.stdout, /setup pi/);
-  assert.match(result.stdout, /--profile/);
 });

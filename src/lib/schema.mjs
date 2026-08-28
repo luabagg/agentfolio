@@ -1,20 +1,16 @@
-/**
- * collection.yaml schema (v1).
- *
- * Extensible inventories: skills, tools, harnesses, instructions, plugins.
- * Each inventory declares a backend. Unknown backends fail loudly at plan/apply.
- */
+/** Collection schema for native skills and collection-owned harness adapters. */
 
 export const COLLECTION_SCHEMA_VERSION = 1;
 
-export const KNOWN_BACKENDS = new Set([
-  "skills-cli",
-  "chezmoi",
-  "reference",
-  "none",
+const ALLOWED_TOP_LEVEL = new Set([
+  "name",
+  "version",
+  "skills",
+  "tools",
+  "adapters",
+  "harnesses",
+  "profiles",
 ]);
-
-export const REQUIRED_TOP_LEVEL = ["name", "version"];
 
 /**
  * Validate a parsed collection document.
@@ -28,7 +24,7 @@ export function validateCollection(doc) {
     return { ok: false, errors: ["collection root must be a mapping"], warnings };
   }
 
-  for (const key of REQUIRED_TOP_LEVEL) {
+  for (const key of ["name", "version"]) {
     if (doc[key] === undefined || doc[key] === null || doc[key] === "") {
       errors.push(`missing required field: ${key}`);
     }
@@ -40,64 +36,28 @@ export function validateCollection(doc) {
     );
   }
 
-  if (doc.skills !== undefined) {
-    validateSkills(doc.skills, errors, warnings);
+  for (const key of Object.keys(doc)) {
+    if (!ALLOWED_TOP_LEVEL.has(key)) errors.push(`unknown top-level field: ${key}`);
   }
 
-  if (doc.tools !== undefined) {
-    validateTools(doc.tools, errors, warnings);
-  }
-
-  if (doc.harnesses !== undefined) {
-    validateHarnesses(doc.harnesses, errors, warnings);
-  }
-
-  if (doc.instructions !== undefined) {
-    validateInstructions(doc.instructions, errors, warnings);
-  }
-
-  if (doc.plugins !== undefined) {
-    validatePlugins(doc.plugins, errors, warnings);
-  }
-
-  if (doc.models !== undefined) {
-    validateModels(doc.models, errors, warnings);
-  }
-
-  if (doc.integrations !== undefined) {
-    validateIntegrations(doc.integrations, errors, warnings);
-  }
-
-  if (doc.chezmoi !== undefined) {
-    validateChezmoi(doc.chezmoi, errors, warnings);
-  }
+  if (doc.skills !== undefined) validateSkills(doc.skills, errors);
+  if (doc.tools !== undefined) validateTools(doc.tools, errors);
+  if (doc.adapters !== undefined) validateAdapters(doc.adapters, errors);
+  if (doc.harnesses !== undefined) validateHarnesses(doc.harnesses, doc.adapters, errors);
+  if (doc.profiles !== undefined) validateProfiles(doc.profiles, doc.harnesses, errors);
 
   if (errors.length) return { ok: false, errors, warnings };
   return { ok: true, warnings };
 }
 
-function requireBackend(block, path, errors) {
-  if (!block || typeof block !== "object") {
-    errors.push(`${path} must be a mapping`);
-    return;
-  }
-  const backend = block.backend;
-  if (!backend) {
-    errors.push(`${path}.backend is required`);
-    return;
-  }
-  if (!KNOWN_BACKENDS.has(backend)) {
-    errors.push(
-      `${path}.backend ${JSON.stringify(backend)} unknown; known: ${[...KNOWN_BACKENDS].join(", ")}`,
-    );
-  }
+function isMapping(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-function validateSkills(skills, errors, warnings) {
-  requireBackend(skills, "skills", errors);
-  if (!skills || typeof skills !== "object") return;
-  if (skills.backend && skills.backend !== "skills-cli") {
-    warnings.push(`skills.backend is ${skills.backend}; recommended skills-cli`);
+function validateSkills(skills, errors) {
+  if (!isMapping(skills)) {
+    errors.push("skills must be a mapping");
+    return;
   }
   if (skills.local !== undefined && typeof skills.local !== "string") {
     errors.push("skills.local must be a relative path string");
@@ -105,99 +65,124 @@ function validateSkills(skills, errors, warnings) {
   if (skills.imports !== undefined && typeof skills.imports !== "string") {
     errors.push("skills.imports must be a relative path string");
   }
+  if (skills.scope !== undefined && !["global", "project"].includes(skills.scope)) {
+    errors.push('skills.scope must be "global" or "project"');
+  }
+  if (
+    skills.agents !== undefined &&
+    (!Array.isArray(skills.agents) || skills.agents.some((agent) => typeof agent !== "string" || !agent))
+  ) {
+    errors.push("skills.agents must be an array of non-empty strings");
+  }
+  if (skills.copy !== undefined && typeof skills.copy !== "boolean") {
+    errors.push("skills.copy must be a boolean");
+  }
 }
 
-function validateTools(tools, errors, warnings) {
-  requireBackend(tools, "tools", errors);
-  if (!tools || typeof tools !== "object") return;
+function validateTools(tools, errors) {
+  if (!isMapping(tools)) {
+    errors.push("tools must be a mapping");
+    return;
+  }
   if (tools.catalog !== undefined && typeof tools.catalog !== "string") {
     errors.push("tools.catalog must be a relative path string");
   }
-  if (tools.apply && tools.apply !== "reference") {
-    warnings.push(`tools.apply=${tools.apply}; only "reference" supported in v1`);
-  }
 }
 
-function validateHarnesses(harnesses, errors, warnings) {
-  if (!Array.isArray(harnesses)) {
-    errors.push("harnesses must be an array");
+function validateAdapters(adapters, errors) {
+  if (!isMapping(adapters)) {
+    errors.push("adapters must be a mapping");
     return;
   }
-  const ids = new Set();
-  for (let i = 0; i < harnesses.length; i++) {
-    const h = harnesses[i];
-    const path = `harnesses[${i}]`;
-    if (!h || typeof h !== "object") {
+
+  for (const [id, adapter] of Object.entries(adapters)) {
+    const path = `adapters.${id}`;
+    if (!id) errors.push("adapter ids must be non-empty");
+    if (!isMapping(adapter)) {
       errors.push(`${path} must be a mapping`);
       continue;
     }
-    if (!h.id) errors.push(`${path}.id is required`);
-    else if (ids.has(h.id)) errors.push(`duplicate harness id: ${h.id}`);
-    else ids.add(h.id);
-    if (!h.source) errors.push(`${path}.source is required`);
-    requireBackend(h, path, errors);
-    if (h.backend && h.backend !== "chezmoi") {
-      warnings.push(`${path}.backend=${h.backend}; harness apply expects chezmoi`);
+    if (
+      !Array.isArray(adapter.command) ||
+      adapter.command.length === 0 ||
+      adapter.command.some((part) => typeof part !== "string" || !part)
+    ) {
+      errors.push(`${path}.command must be a non-empty array of non-empty strings`);
+    }
+    if (
+      adapter.timeout !== undefined &&
+      (!Number.isInteger(adapter.timeout) || adapter.timeout <= 0)
+    ) {
+      errors.push(`${path}.timeout must be a positive integer in milliseconds`);
     }
   }
 }
 
-function validateInstructions(instructions, errors, warnings) {
-  requireBackend(instructions, "instructions", errors);
-  if (!instructions || typeof instructions !== "object") return;
-  if (instructions.global !== undefined && typeof instructions.global !== "string") {
-    errors.push("instructions.global must be a relative path string");
+function validateHarnesses(harnesses, adapters, errors) {
+  if (!isMapping(harnesses)) {
+    errors.push("harnesses must be a mapping");
+    return;
   }
-  if (instructions.backend && instructions.backend !== "chezmoi") {
-    warnings.push(
-      `instructions.backend=${instructions.backend}; recommended chezmoi for file placement`,
-    );
+  const declaredAdapters = isMapping(adapters) ? adapters : {};
+
+  for (const [id, harness] of Object.entries(harnesses)) {
+    const path = `harnesses.${id}`;
+    if (!id) errors.push("harness ids must be non-empty");
+    if (!isMapping(harness)) {
+      errors.push(`${path} must be a mapping`);
+      continue;
+    }
+    if (typeof harness.adapter !== "string" || !harness.adapter) {
+      errors.push(`${path}.adapter is required`);
+    } else if (!Object.hasOwn(declaredAdapters, harness.adapter)) {
+      errors.push(`${path}.adapter references unknown adapter: ${JSON.stringify(harness.adapter)}`);
+    }
+    if (!Array.isArray(harness.actions) || harness.actions.length === 0) {
+      errors.push(`${path}.actions must be a non-empty array`);
+      continue;
+    }
+    for (const [index, action] of harness.actions.entries()) {
+      const actionPath = `${path}.actions[${index}]`;
+      if (!isMapping(action)) {
+        errors.push(`${actionPath} must be a mapping`);
+        continue;
+      }
+      if (typeof action.action !== "string" || !action.action) {
+        errors.push(`${actionPath}.action is required`);
+      }
+      if (action.summary !== undefined && typeof action.summary !== "string") {
+        errors.push(`${actionPath}.summary must be a string`);
+      }
+    }
   }
 }
 
-function validatePlugins(plugins, errors, warnings) {
-  if (!plugins || typeof plugins !== "object") {
-    errors.push("plugins must be a mapping");
+function validateProfiles(profiles, harnesses, errors) {
+  if (!isMapping(profiles)) {
+    errors.push("profiles must be a mapping");
     return;
   }
-  if (plugins.backend && plugins.backend !== "none") {
-    warnings.push(`plugins.backend=${plugins.backend}; recommended none (list/hint only)`);
-  }
-}
+  const declaredHarnesses = isMapping(harnesses) ? harnesses : {};
 
-function validateModels(models, errors, warnings) {
-  if (!models || typeof models !== "object" || Array.isArray(models)) {
-    errors.push("models must be a mapping");
-    return;
-  }
-  if (models.policy !== undefined && typeof models.policy !== "string") {
-    errors.push("models.policy must be a relative path string");
-  }
-  if (models.lock !== undefined && typeof models.lock !== "string") {
-    errors.push("models.lock must be a relative path string");
-  }
-}
-
-function validateIntegrations(integrations, errors, warnings) {
-  if (!integrations || typeof integrations !== "object" || Array.isArray(integrations)) {
-    errors.push("integrations must be a mapping");
-    return;
-  }
-  const cursorBridge = integrations.cursorBridge;
-  if (cursorBridge !== undefined && (typeof cursorBridge !== "object" || Array.isArray(cursorBridge))) {
-    errors.push("integrations.cursorBridge must be a mapping");
-  }
-}
-
-function validateChezmoi(chezmoi, errors, warnings) {
-  if (!chezmoi || typeof chezmoi !== "object") {
-    errors.push("chezmoi must be a mapping");
-    return;
-  }
-  if (chezmoi.sourceDir !== undefined && typeof chezmoi.sourceDir !== "string") {
-    errors.push("chezmoi.sourceDir must be a relative path string");
-  }
-  if (chezmoi.destinationDir !== undefined && typeof chezmoi.destinationDir !== "string") {
-    errors.push("chezmoi.destinationDir must be a path string");
+  for (const [name, profile] of Object.entries(profiles)) {
+    const path = `profiles.${name}`;
+    if (!isMapping(profile)) {
+      errors.push(`${path} must be a mapping`);
+      continue;
+    }
+    if (profile.skills !== undefined && typeof profile.skills !== "boolean") {
+      errors.push(`${path}.skills must be a boolean`);
+    }
+    if (profile.harnesses !== undefined && !Array.isArray(profile.harnesses)) {
+      errors.push(`${path}.harnesses must be an array`);
+      continue;
+    }
+    for (const [index, id] of (profile.harnesses ?? []).entries()) {
+      if (typeof id !== "string" || !id) {
+        errors.push(`${path}.harnesses[${index}] must be a non-empty string`);
+      } else if (id !== "*" && !Object.hasOwn(declaredHarnesses, id)) {
+        errors.push(`${path}.harnesses[${index}] unknown harness: ${JSON.stringify(id)}`);
+      }
+    }
   }
 }

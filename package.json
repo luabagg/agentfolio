@@ -1,7 +1,7 @@
 {
   "name": "agentfolio",
   "version": "0.1.0",
-  "description": "Orchestrate agent collections: skills via skills-cli, harness configs via chezmoi",
+  "description": "Plan and apply harness-agnostic agent collections",
   "directories": {
     "doc": "docs",
     "example": "examples",
@@ -14,12 +14,10 @@
   "keywords": [
     "agentfolio",
     "agent-skills",
-    "chezmoi",
     "skills-cli",
+    "workflow-adapters",
     "harness",
-    "opencode",
-    "pi",
-    "cursor"
+    "agent-configuration"
   ],
   "author": "",
   "license": "MIT",

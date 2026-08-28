@@ -3,10 +3,7 @@ import test from "node:test";
 import { validateCollection, COLLECTION_SCHEMA_VERSION } from "../src/lib/schema.mjs";
 
 test("accepts minimal valid collection", () => {
-  const result = validateCollection({
-    name: "demo",
-    version: COLLECTION_SCHEMA_VERSION,
-  });
+  const result = validateCollection({ name: "demo", version: COLLECTION_SCHEMA_VERSION });
   assert.equal(result.ok, true);
   assert.deepEqual(result.warnings, []);
 });
@@ -14,46 +11,113 @@ test("accepts minimal valid collection", () => {
 test("rejects missing name/version", () => {
   const result = validateCollection({});
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some((e) => e.includes("name")));
-  assert.ok(result.errors.some((e) => e.includes("version")));
+  assert.ok(result.errors.some((error) => error.includes("name")));
+  assert.ok(result.errors.some((error) => error.includes("version")));
 });
 
-test("rejects unknown backend", () => {
+test("accepts collection-owned harness actions and adapters", () => {
   const result = validateCollection({
     name: "demo",
     version: 1,
-    skills: { backend: "magic", local: "./skills" },
-  });
-  assert.equal(result.ok, false);
-  assert.ok(result.errors.some((e) => e.includes("unknown")));
-});
-
-test("accepts full inventory shape", () => {
-  const result = validateCollection({
-    name: "demo",
-    version: 1,
-    skills: { backend: "skills-cli", local: "./skills" },
-    tools: { backend: "reference", catalog: "./tools/catalog.json", apply: "reference" },
-    harnesses: [
-      { id: "pi", source: "./harnesses/pi", backend: "chezmoi" },
-      { id: "cursor", source: "./harnesses/cursor", backend: "chezmoi" },
-    ],
-    instructions: { global: "./AGENTS.global.md", backend: "chezmoi" },
-    plugins: { backend: "none" },
-    chezmoi: { sourceDir: "./chezmoi", destinationDir: "./apply-target" },
+    skills: { local: "./skills", scope: "global", agents: ["*"], copy: false },
+    tools: { catalog: "./tools.json" },
+    adapters: {
+      local: { command: ["node", "./scripts/adapter.mjs"], timeout: 30_000 },
+    },
+    harnesses: {
+      terminal: {
+        adapter: "local",
+        actions: [
+          { action: "add-plugin", source: "example" },
+          { action: "add-agents", source: "./agents" },
+        ],
+      },
+    },
+    profiles: {
+      default: { skills: true, harnesses: ["terminal"] },
+      skills: { skills: true, harnesses: [] },
+    },
   });
   assert.equal(result.ok, true);
 });
 
-test("rejects duplicate harness ids", () => {
+test("rejects invalid skills options", () => {
   const result = validateCollection({
     name: "demo",
     version: 1,
-    harnesses: [
-      { id: "pi", source: "./a", backend: "chezmoi" },
-      { id: "pi", source: "./b", backend: "chezmoi" },
-    ],
+    skills: { scope: "machine", agents: "all", copy: "yes" },
   });
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some((e) => e.includes("duplicate")));
+  assert.ok(result.errors.some((error) => error.includes("skills.scope")));
+  assert.ok(result.errors.some((error) => error.includes("skills.agents")));
+  assert.ok(result.errors.some((error) => error.includes("skills.copy")));
+});
+
+test("rejects malformed adapter command and timeout", () => {
+  const result = validateCollection({
+    name: "demo",
+    version: 1,
+    adapters: {
+      empty: { command: [] },
+      string: { command: "node adapter.mjs" },
+      timeout: { command: ["node", "adapter.mjs"], timeout: 0 },
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("adapters.empty.command")));
+  assert.ok(result.errors.some((error) => error.includes("adapters.string.command")));
+  assert.ok(result.errors.some((error) => error.includes("adapters.timeout.timeout")));
+});
+
+test("rejects harnesses with missing adapters or malformed actions", () => {
+  const result = validateCollection({
+    name: "demo",
+    version: 1,
+    adapters: { local: { command: ["node", "adapter.mjs"] } },
+    harnesses: {
+      missing: { adapter: "unknown", actions: [{ action: "setup" }] },
+      empty: { adapter: "local", actions: [] },
+      malformed: { adapter: "local", actions: ["setup", { summary: "missing action" }] },
+    },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("unknown adapter")));
+  assert.ok(result.errors.some((error) => error.includes("harnesses.empty.actions")));
+  assert.ok(result.errors.some((error) => error.includes("harnesses.malformed.actions[0]")));
+  assert.ok(result.errors.some((error) => error.includes("harnesses.malformed.actions[1].action")));
+});
+
+test("rejects profile with unknown harness", () => {
+  const result = validateCollection({
+    name: "demo",
+    version: 1,
+    profiles: { bad: { skills: false, harnesses: ["missing"] } },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("profiles.bad.harnesses[0]")));
+});
+
+test("accepts wildcard harness profile", () => {
+  const result = validateCollection({
+    name: "demo",
+    version: 1,
+    adapters: { local: { command: ["node", "adapter.mjs"] } },
+    harnesses: { terminal: { adapter: "local", actions: [{ action: "setup" }] } },
+    profiles: { default: { skills: false, harnesses: ["*"] } },
+  });
+  assert.equal(result.ok, true);
+});
+
+test("rejects backend-shaped legacy collection fields", () => {
+  const result = validateCollection({
+    name: "demo",
+    version: 1,
+    harnesses: [{ id: "terminal", source: "./terminal", backend: "chezmoi" }],
+    instructions: { backend: "chezmoi" },
+    chezmoi: { destinationDir: "$HOME" },
+  });
+  assert.equal(result.ok, false);
+  assert.ok(result.errors.some((error) => error.includes("harnesses must be a mapping")));
+  assert.ok(result.errors.some((error) => error.includes("unknown top-level field: instructions")));
+  assert.ok(result.errors.some((error) => error.includes("unknown top-level field: chezmoi")));
 });

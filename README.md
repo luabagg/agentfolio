@@ -1,104 +1,84 @@
 # Agentfolio
 
-Orchestrate **agent collections**: skills via [skills-cli](https://skills.sh/), files via [chezmoi](https://www.chezmoi.io/), Pi setup via local commands.
+A tool for organizing your agent skills.
 
-A **collection** is a git-tracked directory. Agentfolio reads it and applies backends. Live `~/.pi` and `~/.cursor` are targets, not the source of truth.
-
-An agent may choose a profile. Agentfolio applies the change. Do not edit live config by hand.
+Agentfolio plans, validates, and applies **YAML-defined harness workflows** without knowing which AI harnesses they target. Collections own harness behavior through adapters, while skills remain directly installable through [Skills CLI](https://skills.sh/).
 
 ## Install
 
-Requirements:
-
-- Node.js 20+
-- [chezmoi](https://www.chezmoi.io/install/) on `PATH` (required for harness/instruction apply)
-- Network for `npx skills` on first skill apply
+Requires Node.js 20+.
 
 ```bash
-# from this repo
 npm install
-npm link          # optional: puts `agentfolio` on PATH
-
-# or run without linking
-node ./bin/agentfolio.mjs help
+npm link
 ```
 
 ## Quick start
 
 ```bash
 agentfolio init ./my-collection
-cd my-collection
+cd ./my-collection
 agentfolio plan
-agentfolio doctor
 agentfolio apply --dry-run
 agentfolio apply
 ```
 
-Demo collection (safe local destination, does not touch `$HOME`):
+A generated collection is also a normal Skills CLI repository:
 
 ```bash
-agentfolio plan --collection ./examples/demo-collection
-agentfolio apply --dry-run --collection ./examples/demo-collection
-agentfolio verify --collection ./examples/demo-collection
+npx skills add <owner>/<repository> --all
 ```
 
 ## Commands
 
-| Command | Purpose |
-| --- | --- |
-| `init [dir]` | Scaffold a new collection |
-| `list skills\|harnesses\|tools\|plugins` | Inventory browse |
-| `plan` | Show skills-cli, chezmoi, and model-catalog actions |
-| `diff` / `status` | Chezmoi drift against destination |
-| `apply [--dry-run] [--profile name]` | Apply a profile (`default`, `pi`, `pi-catalog`, `cursor-bridge`) |
-| `setup pi` | Pi packages, extensions, catalog, optional Cursor bridge |
-| `doctor` | Check node / npx / chezmoi / skills + collection paths |
-| `models check\|diff\|refresh` | Validate, preview, or refresh model catalog locks + generated providers |
-| `verify` | Validate collection + doctor |
-
-Global flags: `--collection <path>`, `--json`, `--dry-run`, `--force`, `--profile`, `--catalog-only`, `--skip-cursor-bridge`.
-
-Collection discovery: `--collection`, else `AGENTFOLIO_COLLECTION`, else walk up from cwd for `collection.yaml`.
-
-## Architecture
-
 ```text
-collection.yaml          ← inventories + backends
-skills/                  ← skills-cli
-harnesses/               ← human-readable harness notes
-chezmoi/                 ← chezmoi source (dot_pi, dot_cursor, …)
-AGENTS.global.md         ← declared instructions (placement via chezmoi)
-tools/catalog.json       ← reference-only in v1
-harnesses/catalog.yaml   ← model selection policy
-harnesses/catalog.lock.json ← committed model discovery lock
+agentfolio init [dir]
+agentfolio list skills|harnesses|tools|profiles
+agentfolio plan [--profile name]
+agentfolio apply [--profile name] [--dry-run]
+agentfolio doctor [--profile name]
+agentfolio verify [--profile name]
 ```
 
-| Inventory | Backend | Apply behavior |
-| --- | --- | --- |
-| skills | `skills-cli` | `npx skills add …` |
-| harnesses / instructions | `chezmoi` | `chezmoi apply` from `chezmoi.sourceDir` |
-| tools | `reference` | list / verify only |
-| plugins | `none` | hint only |
-| models | model catalog | check / diff / refresh |
-| Pi setup | `setup pi` / `--profile pi*` | packages, extensions, `~/.pi`, optional Cursor bridge |
+Collection discovery order:
 
-See [docs/architecture.md](docs/architecture.md) and [docs/collection-schema.md](docs/collection-schema.md).
+1. `--collection <path>`
+2. `AGENTFOLIO_COLLECTION`
+3. nearest parent containing `collection.yaml`
 
-## Relation to agent-skills
+## Collection example
 
-[`luabagg/agent-skills`](https://github.com/luabagg/agent-skills) is collection #1. It holds skills, catalog policy, and harness files.
+```yaml
+name: team-agents
+version: 1
 
-This repo is the orchestrator. Prefer Agentfolio for plan, models, and Pi apply.
+skills:
+  local: ./skills
+  scope: global
+  agents: ["*"]
 
-The `agentfolio-operator` skill in that collection chooses the profile. It does not write files itself.
+adapters:
+  team:
+    command: [node, ./scripts/agentfolio-adapter.mjs]
 
-## Develop
+harnesses:
+  terminal:
+    adapter: team
+    actions:
+      - action: add-plugin
+        source: example-plugin
+      - action: add-agents
+        source: ./harnesses/terminal/agents
 
-```bash
-npm test
-npm run agentfolio -- plan --collection ./examples/demo-collection
+profiles:
+  default:
+    skills: true
+    harnesses: [terminal]
+  skills:
+    skills: true
+    harnesses: []
 ```
 
-## License
+Agentfolio understands ordered actions and the adapter lifecycle, but not action semantics. The collection's adapter implements `add-plugin`, `add-agents`, target paths, configuration formats, and runtime-specific behavior.
 
-MIT
+See [architecture](docs/architecture.md) and [collection schema](docs/collection-schema.md).

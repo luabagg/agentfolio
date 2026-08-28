@@ -1,86 +1,79 @@
 import { existsSync } from "node:fs";
-import { chezmoiAvailable, resolveChezmoiPaths } from "../backends/chezmoi.mjs";
-import { commandExists, npx, runCommand, formatCommandResult } from "./run.mjs";
+import { isAbsolute, resolve } from "node:path";
+import { adapterRequest, runAdapter } from "./adapters.mjs";
 import { resolveCollectionPath } from "./collection.mjs";
+import { resolveProfile } from "./profiles.mjs";
+import { commandExists, formatCommandResult, npx, runCommand } from "./run.mjs";
 
-/**
- * Health check for tool + collection.
- */
-export function runDoctor(collection = null) {
-  const checks = [];
-
-  checks.push({
-    id: "node",
-    ok: true,
-    detail: `node ${process.version}`,
-  });
-
-  const npxOk = commandExists(npx) || commandExists("npx");
-  checks.push({
-    id: "npx",
-    ok: npxOk,
-    detail: npxOk ? "npx available (skills-cli via npx --yes skills)" : "npx missing",
-  });
-
-  const chezmoiOk = chezmoiAvailable();
-  let chezmoiDetail = "chezmoi missing — required for harness/instruction apply";
-  if (chezmoiOk) {
-    const ver = formatCommandResult(runCommand(["chezmoi", "--version"]));
-    chezmoiDetail = (ver.stdout || ver.stderr || "chezmoi ok").split("\n")[0];
+function adapterCommandExists(collection, command) {
+  if (!command) return false;
+  if (isAbsolute(command)) return existsSync(command);
+  if (command.includes("/") || command.includes("\\")) {
+    return existsSync(resolve(collection.root, command));
   }
-  checks.push({
-    id: "chezmoi",
-    ok: chezmoiOk,
-    required: false,
-    detail: chezmoiDetail,
-  });
+  return commandExists(command);
+}
 
-  // Probe skills-cli (network may fail; treat presence of npx as soft-ok if offline)
-  if (npxOk) {
-    const probe = formatCommandResult(
-      runCommand([npx, "--yes", "skills", "--help"], { timeout: 60_000 }),
-    );
+/** Health checks for native skills and selected collection adapters. */
+export function runDoctor(collection = null, { profile = "default" } = {}) {
+  const checks = [
+    { id: "node", ok: true, required: true, detail: `node ${process.version}` },
+  ];
+  const resolvedProfile = collection ? resolveProfile(collection.doc, profile) : null;
+  const needsSkills = !collection || Boolean(resolvedProfile.skills && collection.doc.skills?.local);
+
+  if (needsSkills) {
+    const npxOk = commandExists(npx) || commandExists("npx");
     checks.push({
-      id: "skills-cli",
-      ok: probe.status === 0,
-      detail:
-        probe.status === 0
-          ? "skills-cli reachable via npx"
-          : `skills-cli probe failed: ${(probe.stderr || probe.stdout || probe.error || "").slice(0, 200)}`,
+      id: "npx",
+      ok: npxOk,
+      required: true,
+      detail: npxOk ? "npx available (Skills CLI via npx --yes skills)" : "npx missing",
     });
+    if (npxOk) {
+      const probe = formatCommandResult(
+        runCommand([npx, "--yes", "skills", "--help"], { timeout: 60_000 }),
+      );
+      checks.push({
+        id: "skills-cli",
+        ok: probe.status === 0,
+        required: true,
+        detail: probe.status === 0
+          ? "Skills CLI reachable via npx"
+          : `Skills CLI probe failed: ${(probe.stderr || probe.stdout || probe.error || "").slice(0, 200)}`,
+      });
+    }
   }
 
   if (collection) {
     const { root, doc, warnings } = collection;
+    const harnessDetail = resolvedProfile.harnesses.length
+      ? resolvedProfile.harnesses.join(", ")
+      : "none";
+    checks.push({ id: "collection", ok: true, required: true, detail: `${doc.name} @ ${root}` });
     checks.push({
-      id: "collection",
+      id: "collection.profile",
       ok: true,
-      detail: `${doc.name} @ ${root}`,
+      required: true,
+      detail: `${resolvedProfile.name}: skills=${resolvedProfile.skills}; harnesses=${harnessDetail}`,
     });
 
     if (warnings?.length) {
       checks.push({
         id: "collection.warnings",
         ok: true,
+        required: false,
         detail: warnings.join("; "),
       });
     }
 
-    if (doc.skills?.local) {
+    if (needsSkills) {
       const local = resolveCollectionPath(root, doc.skills.local);
       checks.push({
         id: "skills.local",
         ok: Boolean(local && existsSync(local)),
+        required: true,
         detail: local ?? doc.skills.local,
-      });
-    }
-
-    if (doc.harnesses?.length || doc.instructions || doc.chezmoi) {
-      const { sourceDir } = resolveChezmoiPaths(collection);
-      checks.push({
-        id: "chezmoi.source",
-        ok: existsSync(sourceDir),
-        detail: sourceDir,
       });
     }
 
@@ -89,30 +82,57 @@ export function runDoctor(collection = null) {
       checks.push({
         id: "tools.catalog",
         ok: Boolean(catalog && existsSync(catalog)),
+        required: true,
         detail: catalog ?? doc.tools.catalog,
       });
     }
 
-    if (doc.instructions?.global) {
-      const global = resolveCollectionPath(root, doc.instructions.global);
-      checks.push({
-        id: "instructions.global",
-        ok: Boolean(global && existsSync(global)),
-        detail: global ?? doc.instructions.global,
-      });
+    const commandStatus = new Map();
+    for (const harnessId of resolvedProfile.harnesses) {
+      const harness = doc.harnesses[harnessId];
+      const adapter = doc.adapters[harness.adapter];
+      if (!commandStatus.has(harness.adapter)) {
+        const ok = adapterCommandExists(collection, adapter.command[0]);
+        commandStatus.set(harness.adapter, ok);
+        checks.push({
+          id: `adapter.${harness.adapter}.command`,
+          ok,
+          required: true,
+          detail: adapter.command.join(" "),
+        });
+      }
+      if (!commandStatus.get(harness.adapter)) continue;
+
+      try {
+        const request = adapterRequest(collection, "doctor", harnessId, null);
+        const response = runAdapter(collection, harness.adapter, request);
+        for (const check of response.checks ?? []) {
+          checks.push({
+            id: `adapter.${harness.adapter}.${check.id}`,
+            ok: Boolean(check.ok),
+            required: check.required !== false,
+            detail: check.detail ?? harnessId,
+          });
+        }
+      } catch (error) {
+        checks.push({
+          id: `adapter.${harness.adapter}.${harnessId}.doctor`,
+          ok: false,
+          required: true,
+          detail: error.message,
+        });
+      }
     }
   }
 
-  const ok = checks.every((c) => c.ok || c.required === false);
-  const hardFail = checks.some((c) => c.required && !c.ok);
-  return { ok: ok && !hardFail, checks };
+  return { ok: checks.every((check) => check.ok || check.required === false), checks };
 }
 
 export function formatDoctorText(report) {
   const lines = [`Doctor: ${report.ok ? "OK" : "FAIL"}`, ""];
-  for (const c of report.checks) {
-    const mark = c.ok ? "ok" : "FAIL";
-    lines.push(`[${mark}] ${c.id}: ${c.detail}`);
+  for (const check of report.checks) {
+    const mark = check.ok ? "ok" : check.required === false ? "optional" : "FAIL";
+    lines.push(`[${mark}] ${check.id}: ${check.detail}`);
   }
   return lines.join("\n");
 }
