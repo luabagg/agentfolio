@@ -4,7 +4,7 @@ import { adapterRequest, runAdapter } from "./adapters.mjs";
 import { resolveCollectionPath } from "./collection.mjs";
 import { resolveProfile } from "./profiles.mjs";
 import { skillsCommand } from "../backends/skills-cli.mjs";
-import { commandExists, runProcess } from "./run.mjs";
+import { commandExists, redactText, runProcess } from "./run.mjs";
 
 function adapterCommandExists(collection, command) {
   if (!command) return false;
@@ -88,7 +88,7 @@ export function runDoctor(collection = null, { profile = "default" } = {}) {
           id: `adapter.${harness.adapter}.command`,
           ok,
           required: true,
-          detail: adapter.command.join(" "),
+          detail: redactText(adapter.command.join(" ")),
         });
       }
       if (!commandStatus.get(harness.adapter)) continue;

@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { adapterRequest, runAdapter } from "../src/lib/adapters.mjs";
+import { buildPlan } from "../src/lib/plan.mjs";
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 const fixtureAdapter = join(fixtures, "harness-adapter.mjs");
@@ -64,6 +65,15 @@ test("rejects malformed and unsafe response fields", () => {
     () => runAdapter(rejected, "fixture", requestFor(rejected)),
     (error) => !String(error.message).includes("[REDACTED]") && /rejected request/.test(error.message),
   );
+});
+
+test("redacts configured adapter command values in plans", () => {
+  const current = collection("setup", 1_000, "no-command");
+  const rawValue = ["authorization", "test", "credential", "123456789012"].join("=");
+  current.doc.adapters.fixture.command.push(rawValue);
+  const output = JSON.stringify(buildPlan(current));
+  assert.doesNotMatch(output, /test-credential-123456789012/);
+  assert.match(output, /\[REDACTED\]/);
 });
 
 test("requires valid doctor checks", () => {

@@ -1,6 +1,7 @@
 import { applySkills } from "../backends/skills-cli.mjs";
 import { adapterRequest, runAdapter } from "./adapters.mjs";
 import { buildPlan } from "./plan.mjs";
+import { redactValue } from "./run.mjs";
 
 /** Apply native skills and collection-owned harness actions in plan order. */
 export function applyCollection(
@@ -47,7 +48,7 @@ export function applyCollection(
         adapter: action.adapter,
         harness: action.harness,
         action: action.action,
-        command: response.command ?? action.command,
+        command: redactValue(response.command ?? action.command),
         dryRun,
       };
       if (result.changed === undefined) delete result.changed;

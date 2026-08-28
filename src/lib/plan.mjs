@@ -3,6 +3,7 @@ import { listSkillsInventory, planSkills } from "../backends/skills-cli.mjs";
 import { adapterRequest, runAdapter } from "./adapters.mjs";
 import { readJsonIfExists, resolveCollectionPath } from "./collection.mjs";
 import { resolveProfile } from "./profiles.mjs";
+import { redactValue } from "./run.mjs";
 
 /** Build a concrete plan for native skills and selected harness actions. */
 export function buildPlan(collection, { profile = "default" } = {}) {
@@ -26,7 +27,7 @@ export function buildPlan(collection, { profile = "default" } = {}) {
         index,
         config,
         summary: response.summary ?? config.summary ?? `${harnessId}: ${config.action}`,
-        command: response.command ?? doc.adapters[harness.adapter].command,
+        command: redactValue(response.command ?? doc.adapters[harness.adapter].command),
         detail: response.detail ?? null,
         planned: response,
       });

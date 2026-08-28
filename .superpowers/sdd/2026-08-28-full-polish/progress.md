@@ -31,3 +31,5 @@ Ruling: static target-name scans exclude docs/superpowers because the binding re
 Task 7: complete (commit 62c946d, tests node --test tests/scripts.test.mjs && npm run check:dependencies && npm run check:secrets && npm run package:smoke)
 
 Ruling: dependency-policy lifecycle diagnostic remains the plan's exact `is disallowed` message; its regression assertion checks that required wording rather than the contradictory `lifecycle` substring.
+
+Task 8: complete (commit 5ca7612, tests git diff --check && npm ci --ignore-scripts && npm run check:dependencies && npm run check:secrets && npm test && npm run package:smoke)

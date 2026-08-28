@@ -22,6 +22,10 @@ if (mode === "extra-field") {
   process.stdout.write(JSON.stringify({ ok: true, summary: "ok", executor: "spoofed" }));
   process.exit(0);
 }
+if (mode === "no-command") {
+  process.stdout.write(JSON.stringify({ ok: true, summary: "ok" }));
+  process.exit(0);
+}
 if (mode === "secret-detail") {
   process.stdout.write(JSON.stringify({ ok: true, detail: { token: "[REDACTED]" } }));
   process.exit(0);
