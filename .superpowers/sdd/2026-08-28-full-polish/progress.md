@@ -1,4 +1,4 @@
-# SDD ledger — plan: docs/superpowers/plans/2026-08-28-full-polish.md
+# SDD ledger
 
 ## Preflight
 

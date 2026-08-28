@@ -43,4 +43,4 @@ An adapter has a non-empty `executable` string and an `args` array of non-empty 
 
 Agentfolio writes one protocol-v1 request for `plan`, `apply`, or `doctor` to stdin. The adapter writes exactly one JSON object to stdout; diagnostics stay on stderr.
 
-A successful plan/apply response has `ok: true` and may include safe `summary`, `changed`, `status`, `command` argv, and `detail`. A successful doctor response may also include a bounded `checks` array. Each check has string `id`, boolean `ok`, optional boolean `required`, and optional safe string `detail`. Unknown fields and unsafe shapes fail validation. Output is redacted before it reaches text or JSON reports.
+A successful plan/apply response has `ok: true` and may include safe `summary`, `changed`, `status`, `command` argv, and `detail`. A successful doctor response MUST include a bounded `checks` array. Each check has string `id`, boolean `ok`, optional boolean `required`, and optional safe string `detail`. Unknown fields and unsafe shapes fail validation. Output is redacted before it reaches text or JSON reports.
