@@ -17,3 +17,5 @@ Task 1: complete (commit 3fb48a9, tests node --test tests/schema.test.mjs tests/
 Ruling: action.config is optional because the plan's required demo action omits it; when supplied it must be a mapping, preserving the stated opaque payload boundary. Regression coverage: existing and demo action fixtures without config validate.
 
 Task 2: complete (commit 19d0e62, tests node --test tests/run.test.mjs)
+
+Task 3: complete (commit 9a7c39c, tests node --test tests/adapters.test.mjs tests/collection.test.mjs tests/cli.test.mjs)

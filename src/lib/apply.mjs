@@ -34,18 +34,21 @@ export function applyCollection(
     try {
       const response = runAdapter(collection, action.adapter, request);
       const result = {
-        ...response,
+        ok: response.ok,
+        summary: response.summary ?? action.summary,
+        status: response.status ?? 0,
+        changed: response.changed,
         kind: action.kind,
         executor: "adapter",
         adapter: action.adapter,
         harness: action.harness,
         action: action.action,
-        summary: response.summary ?? action.summary,
         command: response.command ?? action.command,
-        status: response.status ?? 0,
         dryRun,
       };
-      if (response.changed === undefined) delete result.changed;
+      if (result.changed === undefined) delete result.changed;
+      if (result.summary === undefined) delete result.summary;
+      if (result.command === undefined) delete result.command;
       results.push(result);
       if (result.status !== 0) {
         return { ok: false, dryRun, profile: plan.profile.name, results };

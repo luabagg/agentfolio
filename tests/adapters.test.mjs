@@ -20,98 +20,68 @@ function collection(action = "setup", timeout = 1_000, adapterArg) {
       name: "demo",
       version: 1,
       adapters: { fixture: { command, timeout } },
-      harnesses: {
-        terminal: {
-          adapter: "fixture",
-          actions: [{ action, summary: "Fixture action", value: 42 }],
-        },
-      },
+      harnesses: { terminal: { adapter: "fixture", actions: [{ action, summary: "Fixture action", config: { value: 42 } }] } },
     },
   };
 }
 
+function requestFor(current, operation = "plan") {
+  const config = current.doc.harnesses.terminal.actions[0];
+  return adapterRequest(current, operation, "terminal", operation === "doctor" ? null : { index: 0, config });
+}
+
 test("runs adapter with protocol JSON on stdin from collection root", () => {
   const current = collection();
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "plan", "terminal", { index: 0, config });
-  const response = runAdapter(current, "fixture", request);
-
+  const response = runAdapter(current, "fixture", requestFor(current));
   assert.equal(response.ok, true);
   assert.deepEqual(response.command, ["fixture", "terminal", "setup"]);
-  assert.equal(response.observed.cwd, current.root);
-  assert.equal(response.observed.request.protocolVersion, 1);
-  assert.equal(response.observed.request.action.name, "setup");
-  assert.equal(response.observed.request.action.config.value, 42);
+  assert.equal(response.detail.cwd, current.root);
+  assert.equal(response.detail.request.protocolVersion, 1);
+  assert.equal(response.detail.request.action, "setup");
 });
 
 test("passes adapter argv literally without shell expansion", () => {
   const current = collection("setup", 1_000, "literal&value");
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "plan", "terminal", { index: 0, config });
-  const response = runAdapter(current, "fixture", request);
-  assert.deepEqual(response.observed.argv, ["literal&value"]);
+  assert.deepEqual(runAdapter(current, "fixture", requestFor(current)).detail.argv, ["literal&value"]);
 });
 
 test("builds doctor request with harness actions and no action", () => {
   const current = collection();
-  const request = adapterRequest(current, "doctor", "terminal", null);
+  const request = requestFor(current, "doctor");
   const response = runAdapter(current, "fixture", request);
-
   assert.equal(request.action, null);
   assert.deepEqual(request.harness.actions, current.doc.harnesses.terminal.actions);
   assert.equal(response.checks[0].id, "fixture");
 });
 
-test("rejects malformed optional response fields", () => {
-  const current = collection("setup", 1_000, "bad-command");
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "plan", "terminal", { index: 0, config });
-  assert.throws(() => runAdapter(current, "fixture", request), /response.command/);
+test("rejects malformed and unsafe response fields", () => {
+  for (const mode of ["bad-command", "extra-field", "secret-detail"]) {
+    const current = collection("setup", 1_000, mode);
+    assert.throws(() => runAdapter(current, "fixture", requestFor(current)), mode === "extra-field" ? /unexpected field/ : /response\.(command|detail)|sensitive/);
+  }
+  const rejected = collection("setup", 1_000, "reject-secret");
+  assert.throws(
+    () => runAdapter(rejected, "fixture", requestFor(rejected)),
+    (error) => !String(error.message).includes("[REDACTED]") && /rejected request/.test(error.message),
+  );
 });
 
 test("requires valid doctor checks", () => {
   const missing = collection("setup", 1_000, "missing-checks");
   const malformed = collection("setup", 1_000, "bad-checks");
-  assert.throws(
-    () => runAdapter(missing, "fixture", adapterRequest(missing, "doctor", "terminal", null)),
-    /response.checks/,
-  );
-  assert.throws(
-    () => runAdapter(malformed, "fixture", adapterRequest(malformed, "doctor", "terminal", null)),
-    /checks\[0\]\.ok/,
-  );
+  assert.throws(() => runAdapter(missing, "fixture", requestFor(missing, "doctor")), /response.checks/);
+  assert.throws(() => runAdapter(malformed, "fixture", requestFor(malformed, "doctor")), /checks\[0\]\.ok/);
 });
 
-test("rejects invalid adapter JSON", () => {
-  const current = collection("invalid-json");
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "plan", "terminal", { index: 0, config });
-  assert.throws(() => runAdapter(current, "fixture", request), /invalid JSON/);
+test("rejects invalid adapter JSON, exit, and rejection without output leaks", () => {
+  for (const [action, operation, matcher] of [["invalid-json", "plan", /invalid JSON/], ["exit", "apply", /failed with status 2/], ["reject", "apply", /rejected request/]]) {
+    const current = collection(action);
+    assert.throws(() => runAdapter(current, "fixture", requestFor(current, operation)), (error) => matcher.test(error.message) && !/adapter exploded|action rejected/.test(error.message));
+  }
 });
 
-test("rejects non-zero adapter exit", () => {
-  const current = collection("exit");
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "apply", "terminal", { index: 0, config });
-  assert.throws(() => runAdapter(current, "fixture", request), /adapter exploded/);
-});
-
-test("rejects adapter response with ok false", () => {
-  const current = collection("reject");
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "apply", "terminal", { index: 0, config });
-  assert.throws(() => runAdapter(current, "fixture", request), /action rejected/);
-});
-
-test("rejects timed out adapter", () => {
+test("rejects timed out and undeclared adapters", () => {
   const current = collection("sleep", 10);
-  const config = current.doc.harnesses.terminal.actions[0];
-  const request = adapterRequest(current, "plan", "terminal", { index: 0, config });
-  assert.throws(() => runAdapter(current, "fixture", request), /timed out/);
-});
-
-test("rejects undeclared adapter", () => {
-  const current = collection();
-  const request = adapterRequest(current, "doctor", "terminal", null);
-  assert.throws(() => runAdapter(current, "missing", request), /Unknown adapter/);
+  assert.throws(() => runAdapter(current, "fixture", requestFor(current)), /timed out/);
+  assert.throws(() => runAdapter(current, "missing", requestFor(current, "doctor")), /Unknown adapter/);
 });

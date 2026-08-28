@@ -92,8 +92,9 @@ test("apply propagates dry-run to adapter", () => {
   const report = applyCollection(harnessCollection(), { dryRun: true });
   assert.equal(report.ok, true);
   assert.equal(report.results.length, 1);
-  assert.equal(report.results[0].observed.request.operation, "apply");
-  assert.equal(report.results[0].observed.request.dryRun, true);
+  assert.equal(report.results[0].executor, "adapter");
+  assert.equal(report.results[0].adapter, "fixture");
+  assert.equal(report.results[0].dryRun, true);
 });
 
 test("apply fails fast when an adapter action rejects", () => {
@@ -104,7 +105,7 @@ test("apply fails fast when an adapter action rejects", () => {
   ]));
   assert.equal(report.ok, false);
   assert.equal(report.results.length, 2);
-  assert.match(report.results[1].stderr, /action rejected/);
+  assert.match(report.results[1].stderr, /rejected request/);
   assert.equal(Object.hasOwn(report.results[1], "changed"), false);
   assert.equal(Object.hasOwn(report.results[1], "changed"), false);
 });
@@ -118,7 +119,7 @@ test("adapter responses cannot overwrite orchestration metadata", () => {
   assert.equal(result.harness, "terminal");
   assert.equal(result.action, "spoof");
   assert.equal(result.dryRun, true);
-  assert.equal(Object.hasOwn(result, "changed"), false);
+  assert.equal(result.changed, true);
 });
 
 test("apply with no selected actions succeeds", () => {
