@@ -53,11 +53,12 @@ test("version prints semver", () => {
   assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
 });
 
-test("plan against skills-only demo collection", () => {
+test("plan against generic demo collection", () => {
   const result = run(["plan", "--collection", demoRoot]);
   assert.equal(result.status, 0, result.stderr);
   assert.match(result.stdout, /Collection: demo/);
   assert.match(result.stdout, /skills-cli/);
+  assert.match(result.stdout, /project:configure-project/);
   assert.doesNotMatch(result.stdout, /chezmoi/);
 });
 

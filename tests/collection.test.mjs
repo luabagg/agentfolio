@@ -48,12 +48,13 @@ test("findCollectionRoot discovers ancestors and collection paths stay contained
   }
 });
 
-test("loadCollection loads skills-only demo", () => {
+test("loadCollection loads generic demo adapter", () => {
   const collection = loadCollection(demoRoot);
   assert.equal(collection.doc.name, "demo");
   assert.equal(collection.doc.version, 1);
   assert.ok(collection.doc.skills?.local);
-  assert.equal(collection.doc.harnesses, undefined);
+  assert.equal(collection.doc.harnesses.project.adapter, "demo");
+  assert.equal(collection.doc.harnesses.project.actions[0].action, "configure-project");
 });
 
 test("listLocalSkills finds hello-skill", () => {
@@ -62,12 +63,12 @@ test("listLocalSkills finds hello-skill", () => {
   assert.equal(skills[0].id, "hello-skill");
 });
 
-test("skills-only plan includes native Skills CLI action", () => {
+test("default demo plan includes native Skills CLI and adapter actions", () => {
   const plan = buildPlan(loadCollection(demoRoot));
   assert.equal(plan.collection.name, "demo");
-  assert.deepEqual(plan.profile, { name: "default", skills: true, harnesses: [] });
+  assert.deepEqual(plan.profile, { name: "default", skills: true, harnesses: ["project"] });
   assert.ok(plan.actions.some((action) => action.executor === "skills-cli"));
-  assert.equal(plan.actions.some((action) => action.executor === "adapter"), false);
+  assert.ok(plan.actions.some((action) => action.executor === "adapter"));
 });
 
 test("applies the already-built skills command", () => {

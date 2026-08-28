@@ -9,13 +9,16 @@ skills:
 tools:
   catalog: ./tools/catalog.json
 
+adapters:
+  demo:
+    command: [node, ./scripts/demo-adapter.mjs]
+harnesses:
+  project:
+    adapter: demo
+    actions:
+      - action: configure-project
+        summary: Report project configuration
 profiles:
-  default:
-    skills: true
-    harnesses: []
-  skills:
-    skills: true
-    harnesses: []
-  catalog:
-    skills: false
-    harnesses: []
+  default: { skills: true, harnesses: [project] }
+  skills: { skills: true, harnesses: [] }
+  catalog: { skills: false, harnesses: [] }

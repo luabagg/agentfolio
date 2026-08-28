@@ -21,3 +21,5 @@ Task 2: complete (commit 19d0e62, tests node --test tests/run.test.mjs)
 Task 3: complete (commit 9a7c39c, tests node --test tests/adapters.test.mjs tests/collection.test.mjs tests/cli.test.mjs)
 
 Task 4: complete (commit 05d09a6, tests node --test tests/skills-cli.test.mjs tests/collection.test.mjs)
+
+Task 5: complete (commit 75aa2aa, tests node --test tests/demo-adapter.test.mjs && node bin/agentfolio.mjs verify --collection examples/demo-collection)
