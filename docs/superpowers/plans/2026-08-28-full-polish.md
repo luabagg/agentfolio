@@ -59,12 +59,19 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
 
   Run `node --test tests/schema.test.mjs`; expect **FAIL** because paths and action credential keys are currently accepted.
 
-- [ ] **Step 2: Add failing discovery/path tests (2 minutes).** In `tests/collection.test.mjs`, create a temporary root with `mkdirSync(join(root, "child"), { recursive: true })`, write `collection.yaml`, then assert:
+- [ ] **Step 2: Add failing discovery/path tests with cleanup (3 minutes).** In `tests/collection.test.mjs`, add `mkdirSync`, `mkdtempSync`, `rmSync`, and `writeFileSync` to the existing `node:fs` import; add `tmpdir` from `node:os`; keep `join` from `node:path`. Create and clean the root exactly:
 
   ```js
-  assert.equal(findCollectionRoot(join(root, "child")), root);
-  assert.throws(() => resolveCollectionPath(root, "../escape"), /relative path/);
-  assert.throws(() => resolveCollectionPath(root, "/tmp/escape"), /relative path/);
+  const root = mkdtempSync(join(tmpdir(), "agentfolio-discovery-"));
+  try {
+    mkdirSync(join(root, "child"), { recursive: true });
+    writeFileSync(join(root, "collection.yaml"), "name: demo\nversion: 1\n");
+    assert.equal(findCollectionRoot(join(root, "child")), root);
+    assert.throws(() => resolveCollectionPath(root, "../escape"), /relative path/);
+    assert.throws(() => resolveCollectionPath(root, "/tmp/escape"), /relative path/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
   ```
 
   Run `node --test tests/collection.test.mjs`; expect **FAIL** because `resolveCollectionPath()` currently permits both paths.
@@ -84,7 +91,18 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
   }
   ```
 
-  Replace the existing string-only checks for `skills.local`, `skills.imports`, and `tools.catalog` with `isSafeRelativePath`. At the start of `validateCollection`, after the root-mapping check, call `containsSensitiveKey(doc)` and append exactly `collection contains sensitive configuration key` when true; this covers every nested known field, opaque action field, and unknown field before normal shape validation. Do not exempt `[REDACTED]`: credential-shaped keys are invalid regardless of value.
+  Add strict recursive allowlists for every known mapping, not only top-level keys. Define and call this helper before each existing type validator:
+
+  ```js
+  function rejectUnknownKeys(value, allowed, path, errors) {
+    if (!isMapping(value)) return;
+    for (const key of Object.keys(value)) {
+      if (!allowed.has(key)) errors.push(`${path}.${key} is not allowed`);
+    }
+  }
+  ```
+
+  Use `new Set(["local", "imports", "scope", "agents", "copy"])` for `skills`; `["catalog"]` for `tools`; `["command", "timeout"]` for each adapter; `["adapter", "actions"]` for each harness; `["skills", "harnesses"]` for each profile; and `["action", "summary"]` for each action before permitting collection-owned opaque payload keys through an explicit `config` mapping. Change action input to `{ action, summary, config }` and validate `config` is a mapping whose keys pass `containsSensitiveKey`; do not allow arbitrary sibling keys. Replace the existing string-only checks for `skills.local`, `skills.imports`, and `tools.catalog` with `isSafeRelativePath`. At the start of `validateCollection`, after the root-mapping check, call `containsSensitiveKey(doc)` and append exactly `collection contains sensitive configuration key` when true. Do not exempt `[REDACTED]`: credential-shaped keys are invalid regardless of value.
 
 - [ ] **Step 4: Contain collection paths (3 minutes).** In `src/lib/collection.mjs`, replace `resolveCollectionPath` with a check using `relative` from `node:path`:
 
@@ -124,12 +142,14 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
 - [ ] **Step 1: Add process-boundary tests (4 minutes).** Create `tests/run.test.mjs` importing `{ redactText, redactValue, runProcess }` from `../src/lib/run.mjs`. Write a temp `child.mjs` that prints `process.argv.slice(2).join("|")`, `process.env.VISIBLE_VALUE`, and `process.env.AGENTFOLIO_TEST_TOKEN`. Assert:
 
   ```js
+  const rawSentinel = ["test", "credential", "123456789012"].join("-");
   const result = runProcess([process.execPath, child, "literal&value"], {
-    env: { ...process.env, VISIBLE_VALUE: "visible", AGENTFOLIO_TEST_TOKEN: "[REDACTED]" },
+    env: { ...process.env, VISIBLE_VALUE: "visible", AGENTFOLIO_TEST_TOKEN: rawSentinel },
   });
   assert.equal(result.status, 0);
   assert.match(result.stdout, /literal&value\|visible/);
-  assert.doesNotMatch(result.stdout, /\[REDACTED\]/);
+  assert.doesNotMatch(result.stdout, new RegExp(rawSentinel));
+  assert.match(result.stdout, /\[REDACTED\]/);
   assert.throws(() => runProcess([]), /non-empty argv/);
   assert.equal(redactText('"authorization":"value-123456789012"'), '"authorization":"[REDACTED]"');
   assert.equal(redactText('cookie="value-123456789012" key=value-123456789012'), 'cookie="[REDACTED]" key=[REDACTED]');
@@ -181,7 +201,17 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
 
 **Interfaces Produces:** allowlisted safe adapter responses and Agentfolio-owned apply/plan/doctor result identities.
 
-- [ ] **Step 1: Add failing malformed-response and observed-transition tests (4 minutes).** In `tests/fixtures/harness-adapter.mjs`, add modes `extra-field`, `secret-detail`, and `reject-secret`; the latter writes `{ ok: false, error: { authorization: "[REDACTED]" } }`. In `tests/adapters.test.mjs`, remove assertions for `response.observed` because `observed` is deliberately no longer protocol output; retain request/cwd/argv coverage by having the fixture put safe values in `detail` only when the allowlist permits it. Add these failure assertions:
+- [ ] **Step 1: Add failing malformed-response and observed-transition tests (4 minutes).** In `tests/fixtures/harness-adapter.mjs`, add modes `extra-field`, `secret-detail`, and `reject-secret`; the latter writes `{ ok: false, error: { authorization: "[REDACTED]" } }`. Replace both existing `observed: { request, cwd: process.cwd(), argv: process.argv.slice(2) }` response properties with this allowed detail object:
+
+  ```js
+  detail: {
+    request: { protocolVersion: request.protocolVersion, operation: request.operation, action: request.action?.name ?? null },
+    cwd: process.cwd(),
+    argv: process.argv.slice(2),
+  }
+  ```
+
+  In `tests/adapters.test.mjs`, replace `response.observed.cwd`, `response.observed.request.protocolVersion`, `response.observed.request.action.name`, and `response.observed.argv` with the corresponding `response.detail` assertions. This preserves request/cwd/argv coverage while proving `observed` is deliberately no longer protocol output. Add these failure assertions:
 
   ```js
   JSON.stringify({ ok: true, summary: "ok", executor: "spoofed" })
@@ -207,9 +237,9 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
   };
   ```
 
-  After parsing, validate `containsSensitiveKey(response)` before creating `const safeResponse = redactValue(response)`; never use unredacted values in errors or reports. For `ok: false`, never interpolate `response.error`, `response.detail`, or `response.stderr`; throw `new Error(`Adapter ${context} rejected request`)`. For `ok: true`, reject `Object.keys(response)` not in `RESPONSE_FIELDS[operation]`, then validate allowed fields including recursive JSON-safe `detail`, `summary`, `command` parts, and doctor check details; use only `safeResponse` after validation. Invoke `runProcess(adapter.command, { cwd: collection.root, input: `${JSON.stringify(request)}\n`, timeout })`.
+  Immediately after confirming `typeof response.ok === "boolean"`, handle failed responses before any successful-response sensitive-key or allowlist validation: `if (!response.ok) throw new Error(`Adapter ${context} rejected request`);`. Never interpolate `response.error`, `response.detail`, or `response.stderr`. Only for `ok: true`, validate `containsSensitiveKey(response)`, then create `const safeResponse = redactValue(response)`; reject `Object.keys(response)` not in `RESPONSE_FIELDS[operation]`, then validate allowed fields including recursive JSON-safe `detail`, `summary`, and `command` parts. Invoke `runProcess(adapter.command, { cwd: collection.root, input: `${JSON.stringify(request)}\n`, timeout })`.
 
-- [ ] **Step 3: Construct safe responses (3 minutes).** Replace `return response;` with a field-by-field object:
+- [ ] **Step 3: Construct safe responses and exact doctor checks (4 minutes).** Replace `return response;` with a field-by-field object. For doctor, reject check keys outside `new Set(["id", "ok", "required", "detail"])`; require `id` to be a non-empty string and `ok` a boolean; permit only boolean `required` and string `detail`; reject nested/non-plain check objects before copying:
 
   ```js
   const safe = { ok: true };
@@ -231,7 +261,7 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
 
   In `src/lib/apply.mjs`, replace `{ ...response, kind: ... }` with `{ ok: response.ok, summary: ..., status: ..., changed: response.changed, kind: ..., executor: "adapter", adapter: ..., harness: ..., action: ..., command: ..., dryRun }`, deleting undefined optional fields afterward.
 
-- [ ] **Step 5: Verify and commit (3 minutes).** Run `node --test tests/adapters.test.mjs tests/cli.test.mjs`; expect **PASS**. Commit exactly:
+- [ ] **Step 5: Verify and commit (3 minutes).** Run `node --test tests/adapters.test.mjs tests/collection.test.mjs tests/cli.test.mjs`; expect **PASS**. Commit exactly:
 
   ```bash
   git add src/lib/adapters.mjs src/lib/plan.mjs src/lib/apply.mjs src/lib/doctor.mjs tests/adapters.test.mjs tests/collection.test.mjs tests/fixtures/harness-adapter.mjs
@@ -329,7 +359,7 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
     catalog: { skills: false, harnesses: [] }
   ```
 
-  In `tests/collection.test.mjs`, replace the existing demo assertion that `doc.harnesses` is absent with `assert.equal(collection.doc.harnesses.project.adapter, "demo")` and `assert.equal(collection.doc.harnesses.project.actions[0].action, "configure-project")`. In `tests/cli.test.mjs`, change the skills-only demo plan assertion to expect `project:configure-project` for default profile and preserve the existing `--profile skills` assertion for skills-only output.
+  In `tests/collection.test.mjs`, replace the existing default-profile assertion `assert.deepEqual(resolveProfile(collection.doc, "default").harnesses, [])` with `assert.deepEqual(resolveProfile(collection.doc, "default").harnesses, ["project"])`; also replace the demo assertion that `doc.harnesses` is absent with `assert.equal(collection.doc.harnesses.project.adapter, "demo")` and `assert.equal(collection.doc.harnesses.project.actions[0].action, "configure-project")`. In `tests/cli.test.mjs`, change the skills-only demo plan assertion to expect `project:configure-project` for default profile and preserve the existing `--profile skills` assertion for skills-only output.
 
 - [ ] **Step 3: Implement non-mutation (4 minutes).** Create `examples/demo-collection/scripts/demo-adapter.mjs` with stdin parsing and exact operation branches:
 
@@ -390,7 +420,7 @@ Node.js ESM on Node 20 and current Node; built-in `node:test`, `node:assert/stri
 
   State “Agentfolio executes this literal argv without a shell; running it trusts collection code.” In `docs/architecture.md`, document plan/apply/doctor flow, inherited auth/no credential storage, response allowlisting/redaction, and the no-target-knowledge boundary.
 
-- [ ] **Step 4: Rewrite schema docs and metadata (4 minutes).** In `docs/collection-schema.md`, document safe relative paths, sensitive-key rejection, protocol response allowed fields, `doctor.checks`, and the pinned local Skills binary. In `package.json`, set description to `Safely plan and apply generic agent collections` and remove `workflow-adapters`, `harness`, and `agent-configuration` keywords; retain `agentfolio`, `agent-skills`, and `skills-cli`.
+- [ ] **Step 4: Rewrite schema docs, remove floating Skills instructions, and update metadata (4 minutes).** In `README.md` and the `README` template in `src/commands/init.mjs`, remove every `npx skills add`/`npx --yes skills` instruction; replace each with the pinned Agentfolio flow `agentfolio plan` and `agentfolio apply --dry-run`, while explaining direct Skills installation is intentionally not documented as a floating network command. In `docs/collection-schema.md`, document safe relative paths, sensitive-key rejection, protocol response allowed fields, `doctor.checks`, and the pinned local Skills binary. In `package.json`, set description to `Safely plan and apply generic agent collections` and remove `workflow-adapters`, `harness`, and `agent-configuration` keywords; retain `agentfolio`, `agent-skills`, and `skills-cli`.
 
 - [ ] **Step 5: Verify and commit (3 minutes).** Run `node --test tests/cli.test.mjs`; expect **PASS**. Run `grep -RnE '\\bPi\\b|\\bCursor\\b|\\bsystemd\\b|\\bchezmoi\\b' README.md docs src bin examples package.json`; expect exit status 1 and no matches. This case-sensitive whole-word check does not falsely match `pinned`. Commit exactly:
 
