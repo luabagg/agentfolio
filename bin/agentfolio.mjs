@@ -24,7 +24,7 @@ function fail(message, code = 1) {
 function printHelp() {
   console.log(`agentfolio ${VERSION}
 
-Orchestrate YAML harness workflows through collection-owned adapters.
+Plan and apply generic external collections through trusted literal argv adapters.
 
 Usage:
   agentfolio <command> [options]
@@ -40,7 +40,7 @@ Commands:
   version                 Show version
 
 Global options:
-  --collection <path>     Collection root (or AGENTFOLIO_COLLECTION)
+  --collection DIRECTORY  Collection root; package root is not a collection
   --profile <name>        Collection-defined profile (default: default)
   --json                  Machine-readable JSON where supported
   --dry-run               Preview apply without writing

@@ -44,6 +44,10 @@ test("help describes harness workflow commands", () => {
   assert.match(result.stdout, /agentfolio/);
   assert.match(result.stdout, /--profile <name>/);
   assert.match(result.stdout, /harness/i);
+  assert.match(result.stdout, /external collection/i);
+  assert.match(result.stdout, /literal argv/i);
+  assert.match(result.stdout, /trust/i);
+  assert.doesNotMatch(result.stdout, /pi|cursor|provider|systemd|chezmoi/i);
   assert.doesNotMatch(result.stdout, /setup pi|models check|catalog-only|cursor-bridge|chezmoi|\bdiff\b|\bstatus\b/i);
 });
 

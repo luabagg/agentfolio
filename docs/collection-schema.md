@@ -1,90 +1,45 @@
 # Collection Schema v1
 
-`collection.yaml` is a mapping. `name` and `version: 1` are required.
+A collection is a `collection.yaml` mapping with `name` and `version: 1`. Unknown keys are rejected at every known mapping. Paths such as `skills.local`, `skills.imports`, and `tools.catalog` must be safe relative paths within the collection. Credential-shaped key names are rejected anywhere, including opaque action configuration.
 
-## Skills
+## Skills and tools
 
 ```yaml
 skills:
   local: ./skills
-  imports: ./imports       # optional reference inventory
-  scope: global            # global or project; default global
-  agents: ["*"]            # optional; default every agent
-  copy: false              # optional; default symlinks
-```
-
-The repository remains directly installable:
-
-```bash
-npx skills add <owner>/<repository> --all
-```
-
-## Adapters
-
-```yaml
-adapters:
-  local:
-    command: [node, ./scripts/agentfolio-adapter.mjs]
-    timeout: 120000        # optional milliseconds
-```
-
-Commands are non-empty argv arrays and run without a shell from the collection root. Adapter IDs are collection-defined.
-
-## Harnesses
-
-```yaml
-harnesses:
-  terminal:
-    adapter: local
-    actions:
-      - action: add-plugin
-        source: example-plugin
-        enabled: true
-      - action: add-agents
-        source: ./harnesses/terminal/agents
-```
-
-`harnesses` is a mapping. Each harness references a declared adapter and has a non-empty ordered `actions` array. Every action requires a non-empty `action` string; optional `summary` must be a string. All other action fields are passed unchanged to the adapter.
-
-## Profiles
-
-```yaml
-profiles:
-  default:
-    skills: true
-    harnesses: [terminal]
-  everything:
-    skills: true
-    harnesses: ["*"]
-  skills:
-    skills: true
-    harnesses: []
-```
-
-An omitted profile defaults `skills` from whether the collection declares skills and selects every harness. An omitted `profiles` mapping provides the same implicit `default` profile.
-
-## Adapter protocol
-
-Agentfolio writes one request object to stdin for `plan`, `apply`, or `doctor`. The adapter writes exactly one response object to stdout and diagnostics to stderr.
-
-```json
-{
-  "protocolVersion": 1,
-  "operation": "apply",
-  "dryRun": true,
-  "collection": { "name": "team", "version": 1, "root": "/absolute/path" },
-  "harness": { "id": "terminal", "actions": [] },
-  "action": { "index": 0, "name": "add-plugin", "config": {} }
-}
-```
-
-Plan/apply responses require `ok` and may return `summary`, `status`, `changed`, `command`, `detail`, `stdout`, and `stderr`. Doctor returns `ok` plus `checks` entries containing `id`, `ok`, `required`, and `detail`.
-
-## Tools
-
-```yaml
+  imports: ./imports
+  scope: global
+  agents: ["*"]
+  copy: false
 tools:
   catalog: ./tools/catalog.json
 ```
 
-Tools are reference-only. Harness-specific instructions, plugins, models, providers, and integrations belong in action payloads interpreted by collection adapters.
+The local Skills executable is the pinned Agentfolio package dependency. `imports` is reference-only and does not install anything.
+
+## Adapters and actions
+
+```yaml
+adapters:
+  local:
+    command: [node, ./scripts/adapter.mjs]
+    timeout: 120000
+harnesses:
+  project:
+    adapter: local
+    actions:
+      - action: configure-project
+        summary: Report configuration
+        config:
+          format: json
+profiles:
+  default: { skills: true, harnesses: [project] }
+```
+
+Adapter commands are non-empty literal argv arrays and execute without a shell from the collection root. Running one trusts collection code. An action permits `action`, optional `summary`, and optional opaque `config` mapping; Agentfolio preserves allowed configuration unchanged.
+
+## Protocol
+
+Agentfolio writes one protocol-v1 request for `plan`, `apply`, or `doctor` to stdin. The adapter writes exactly one JSON object to stdout; diagnostics stay on stderr.
+
+A successful plan/apply response has `ok: true` and may include safe `summary`, `changed`, `status`, `command` argv, and `detail`. A successful doctor response may also include a bounded `checks` array. Each check has string `id`, boolean `ok`, optional boolean `required`, and optional safe string `detail`. Unknown fields and unsafe shapes fail validation. Output is redacted before it reaches text or JSON reports.

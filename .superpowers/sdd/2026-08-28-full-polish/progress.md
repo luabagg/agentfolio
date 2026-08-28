@@ -23,3 +23,7 @@ Task 3: complete (commit 9a7c39c, tests node --test tests/adapters.test.mjs test
 Task 4: complete (commit 05d09a6, tests node --test tests/skills-cli.test.mjs tests/collection.test.mjs)
 
 Task 5: complete (commit 75aa2aa, tests node --test tests/demo-adapter.test.mjs && node bin/agentfolio.mjs verify --collection examples/demo-collection)
+
+Task 6: complete (commit 725d822, tests node --test tests/cli.test.mjs)
+
+Ruling: static target-name scans exclude docs/superpowers because the binding retained plan/spec explicitly quote excluded names as requirements; public documentation and source are covered by the same scan. Regression coverage: CLI help assertions reject target-specific terms.

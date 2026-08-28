@@ -1,21 +1,14 @@
 # Agentfolio
 
-A tool for organizing your agent skills.
+Agentfolio safely plans and applies generic external collections. A collection is a directory explicitly identified by `collection.yaml`; this CLI repository is never implicitly a collection.
 
-Agentfolio plans, validates, and applies **YAML-defined harness workflows** without knowing which AI harnesses they target. Collections own harness behavior through adapters, while skills remain directly installable through [Skills CLI](https://skills.sh/).
-
-## Install
+## Install and start
 
 Requires Node.js 20+.
 
-```bash
+```sh
 npm install
 npm link
-```
-
-## Quick start
-
-```bash
 agentfolio init ./my-collection
 cd ./my-collection
 agentfolio plan
@@ -23,11 +16,21 @@ agentfolio apply --dry-run
 agentfolio apply
 ```
 
-A generated collection is also a normal Skills CLI repository:
+Collection discovery is, in order: `--collection DIRECTORY`, `AGENTFOLIO_COLLECTION`, then the nearest ancestor that physically contains `collection.yaml`.
 
-```bash
-npx skills add <owner>/<repository> --all
+Skills support uses Agentfolio's pinned local Skills CLI binary. Direct Skills installation is intentionally not documented as a floating network command.
+
+## Adapter boundary
+
+```yaml
+adapters:
+  local:
+    command: [node, ./scripts/adapter.mjs]
 ```
+
+Agentfolio executes this literal argv without a shell; running it trusts collection code. Adapters receive one protocol JSON request on stdin and return one JSON object on stdout. Agentfolio inherits normal process authentication but never discovers, stores, or prints credentials.
+
+`plan` reports selected work. `apply --dry-run` passes a dry-run request to adapters and does not run Skills changes. Collections own all action semantics.
 
 ## Commands
 
@@ -39,46 +42,5 @@ agentfolio apply [--profile name] [--dry-run]
 agentfolio doctor [--profile name]
 agentfolio verify [--profile name]
 ```
-
-Collection discovery order:
-
-1. `--collection <path>`
-2. `AGENTFOLIO_COLLECTION`
-3. nearest parent containing `collection.yaml`
-
-## Collection example
-
-```yaml
-name: team-agents
-version: 1
-
-skills:
-  local: ./skills
-  scope: global
-  agents: ["*"]
-
-adapters:
-  team:
-    command: [node, ./scripts/agentfolio-adapter.mjs]
-
-harnesses:
-  terminal:
-    adapter: team
-    actions:
-      - action: add-plugin
-        source: example-plugin
-      - action: add-agents
-        source: ./harnesses/terminal/agents
-
-profiles:
-  default:
-    skills: true
-    harnesses: [terminal]
-  skills:
-    skills: true
-    harnesses: []
-```
-
-Agentfolio understands ordered actions and the adapter lifecycle, but not action semantics. The collection's adapter implements `add-plugin`, `add-agents`, target paths, configuration formats, and runtime-specific behavior.
 
 See [architecture](docs/architecture.md) and [collection schema](docs/collection-schema.md).

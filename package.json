@@ -1,7 +1,7 @@
 {
   "name": "agentfolio",
   "version": "0.1.0",
-  "description": "Plan and apply harness-agnostic agent collections",
+  "description": "Safely plan and apply generic agent collections",
   "directories": {
     "doc": "docs",
     "example": "examples",
@@ -14,10 +14,7 @@
   "keywords": [
     "agentfolio",
     "agent-skills",
-    "skills-cli",
-    "workflow-adapters",
-    "harness",
-    "agent-configuration"
+    "skills-cli"
   ],
   "author": "",
   "license": "MIT",

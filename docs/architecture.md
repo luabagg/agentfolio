@@ -1,70 +1,21 @@
 # Architecture
 
-Agentfolio is a harness-agnostic workflow orchestrator.
+Agentfolio orchestrates external collections and has no target-system knowledge.
 
 ```text
-collection.yaml
-      |
-      v
-  Agentfolio
-  validate / profiles / ordered plan / apply / doctor
-      |
-      +-- Skills CLI (native)
-      `-- collection-owned adapters (JSON over stdin/stdout)
+collection.yaml -> validation and profile selection -> plan -> apply / doctor
+                         |                              |
+                    pinned Skills CLI              trusted adapters
 ```
 
-## Ownership
+A collection owns its adapters, harness IDs, action names, and action configuration. Agentfolio owns collection discovery, strict schema validation, ordered orchestration, literal argv execution, and safe reporting.
 
-| Owner | Responsibilities |
-| --- | --- |
-| Agentfolio | Collection discovery, schema, profile selection, action ordering, dry-run, adapter protocol, native skills |
-| Collection | Harness IDs, action names and payloads, adapter implementations, tool references |
-| Adapter | Plugins, agents, instructions, models, providers, services, paths, platform-specific behavior |
+## Execution flow
 
-Core source must not contain harness names, provider implementations, model catalogs, bridges, service units, or home-directory targets.
+`plan` resolves a profile, plans native Skills work, then invokes each selected adapter in order with a protocol-v1 `plan` request. `apply` uses that already-built ordering, runs Skills once when selected, and calls every adapter with the requested `dryRun` value. `doctor` calls each selected adapter once and collects its checks.
 
-## Harness workflows
+Adapters are an executable trust boundary: their non-empty argv arrays run from the collection root without a shell. They receive one JSON request on stdin and emit one JSON object on stdout. Responses are allowlisted and redacted before reports; raw adapter streams are never displayed.
 
-Harnesses are mappings with ordered actions:
+Authentication remains available through the inherited process environment and user keychains. Agentfolio does not discover, serialize, or store credentials. It rejects credential-shaped schema and protocol keys.
 
-```yaml
-harnesses:
-  terminal:
-    adapter: team
-    actions:
-      - action: add-plugin
-        source: example-plugin
-      - action: add-agents
-        source: ./agents
-```
-
-Action names and payloads are opaque to Agentfolio. The selected adapter receives each action through the protocol and decides what it means.
-
-## Adapter boundary
-
-Adapters are collection-owned argv commands:
-
-```yaml
-adapters:
-  team:
-    command: [node, ./scripts/agentfolio-adapter.mjs]
-    timeout: 120000
-```
-
-Agentfolio runs adapters without a shell from the collection root. Requests and responses are protocol-v1 JSON. `plan` must not mutate; `apply` honors `dryRun`; `doctor` returns structured checks.
-
-## Profiles
-
-Profiles select native skills and harness IDs:
-
-```yaml
-profiles:
-  workstation:
-    skills: true
-    harnesses: [terminal, editor]
-  skills:
-    skills: true
-    harnesses: []
-```
-
-An implicit default selects declared skills and all declared harnesses. `"*"` expands to every harness. Unknown IDs fail validation.
+Skills uses the pinned local `skills` dependency. It neither downloads nor updates that tool during normal execution. Imports are reference-only until they have an executable pinned contract.
