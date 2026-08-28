@@ -5,6 +5,25 @@ import { join } from "node:path";
 import test from "node:test";
 import { redactText, redactValue, runProcess } from "../src/lib/run.mjs";
 
+test("redacts sensitive inherited environment output without options.env", () => {
+  const root = mkdtempSync(join(tmpdir(), "agentfolio-run-inherited-"));
+  const previous = process.env.AGENTFOLIO_INHERITED_TOKEN;
+  const rawSentinel = ["test", "credential", "123456789012"].join("-");
+  try {
+    const child = join(root, "child.mjs");
+    writeFileSync(child, "console.log(process.env.AGENTFOLIO_INHERITED_TOKEN)");
+    process.env.AGENTFOLIO_INHERITED_TOKEN = rawSentinel;
+    const result = runProcess([process.execPath, child]);
+    assert.equal(result.status, 0);
+    assert.doesNotMatch(result.stdout, new RegExp(rawSentinel));
+    assert.match(result.stdout, /\[REDACTED\]/);
+  } finally {
+    if (previous === undefined) delete process.env.AGENTFOLIO_INHERITED_TOKEN;
+    else process.env.AGENTFOLIO_INHERITED_TOKEN = previous;
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("runs literal argv with inherited environment and redacts sensitive output", () => {
   const root = mkdtempSync(join(tmpdir(), "agentfolio-run-"));
   try {

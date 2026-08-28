@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, realpathSync, statSync } from "node:fs";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { validateCollection } from "./schema.mjs";
@@ -43,6 +43,16 @@ export function findCollectionRoot(startDir = process.cwd(), explicit) {
   );
 }
 
+function realExistingPath(path) {
+  let candidate = path;
+  while (!existsSync(candidate)) {
+    const parent = dirname(candidate);
+    if (parent === candidate) throw new Error("collection path has no existing parent");
+    candidate = parent;
+  }
+  return realpathSync(candidate);
+}
+
 export function resolveCollectionPath(root, value) {
   if (!value) return null;
   if (isAbsolute(value)) throw new Error("collection path must be a relative path");
@@ -50,6 +60,12 @@ export function resolveCollectionPath(root, value) {
   const pathRelative = relative(root, path);
   if (pathRelative.startsWith("..") || isAbsolute(pathRelative)) {
     throw new Error("collection path must be a relative path within collection root");
+  }
+  const realRoot = realpathSync(root);
+  const realTarget = realExistingPath(path);
+  const realRelative = relative(realRoot, realTarget);
+  if (realRelative.startsWith("..") || isAbsolute(realRelative)) {
+    throw new Error("collection path must stay within the real collection root");
   }
   return path;
 }

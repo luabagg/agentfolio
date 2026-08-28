@@ -46,9 +46,10 @@ export function runProcess(argv, options = {}) {
     throw new Error("process argv must contain non-empty strings");
   }
   const { cwd, env, input, timeout } = options;
+  const effectiveEnv = env ?? process.env;
   const result = spawnSync(argv[0], argv.slice(1), {
     cwd,
-    env,
+    env: effectiveEnv,
     input,
     timeout,
     encoding: "utf8",
@@ -58,9 +59,9 @@ export function runProcess(argv, options = {}) {
   });
   return {
     status: result.status ?? 1,
-    stdout: normalizeOutput(result.stdout, env),
-    stderr: normalizeOutput(result.stderr, env),
-    error: result.error ? redactEnvironmentValues(redactText(result.error.message), env) : undefined,
+    stdout: normalizeOutput(result.stdout, effectiveEnv),
+    stderr: normalizeOutput(result.stderr, effectiveEnv),
+    error: result.error ? redactEnvironmentValues(redactText(result.error.message), effectiveEnv) : undefined,
     timedOut: result.error?.code === "ETIMEDOUT",
   };
 }
@@ -83,9 +84,10 @@ export function runCommand(command, options = {}) {
     throw new Error("process requires a non-empty argv");
   }
   const { cwd, env, input, timeout } = options;
-  const result = spawnSync(process.env.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command.map(windowsQuote).join(" ")], {
+  const effectiveEnv = env ?? process.env;
+  const result = spawnSync(effectiveEnv.ComSpec ?? "cmd.exe", ["/d", "/s", "/c", command.map(windowsQuote).join(" ")], {
     cwd,
-    env,
+    env: effectiveEnv,
     input,
     timeout,
     encoding: "utf8",
@@ -94,9 +96,9 @@ export function runCommand(command, options = {}) {
   });
   return {
     status: result.status ?? 1,
-    stdout: normalizeOutput(result.stdout, env),
-    stderr: normalizeOutput(result.stderr, env),
-    error: result.error ? redactEnvironmentValues(redactText(result.error.message), env) : undefined,
+    stdout: normalizeOutput(result.stdout, effectiveEnv),
+    stderr: normalizeOutput(result.stderr, effectiveEnv),
+    error: result.error ? redactEnvironmentValues(redactText(result.error.message), effectiveEnv) : undefined,
     timedOut: result.error?.code === "ETIMEDOUT",
   };
 }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -45,6 +45,19 @@ test("findCollectionRoot discovers ancestors and collection paths stay contained
     assert.throws(() => resolveCollectionPath(root, "/tmp/escape"), /relative path/);
   } finally {
     rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("resolveCollectionPath rejects symlink escapes including nonexistent children", () => {
+  const root = mkdtempSync(join(tmpdir(), "agentfolio-collection-"));
+  const outside = mkdtempSync(join(tmpdir(), "agentfolio-outside-"));
+  try {
+    symlinkSync(outside, join(root, "outside-link"), "dir");
+    assert.throws(() => resolveCollectionPath(root, "outside-link"), /real collection root/);
+    assert.throws(() => resolveCollectionPath(root, "outside-link/missing"), /real collection root/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(outside, { recursive: true, force: true });
   }
 });
 
