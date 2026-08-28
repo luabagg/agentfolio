@@ -125,13 +125,12 @@ function validateAdapters(adapters, errors) {
       errors.push(`${path} must be a mapping`);
       continue;
     }
-    rejectUnknownKeys(adapter, new Set(["command", "timeout"]), path, errors);
-    if (
-      !Array.isArray(adapter.command)
-      || adapter.command.length === 0
-      || adapter.command.some((part) => typeof part !== "string" || !part)
-    ) {
-      errors.push(`${path}.command must be a non-empty array of non-empty strings`);
+    rejectUnknownKeys(adapter, new Set(["executable", "args", "timeout"]), path, errors);
+    if (typeof adapter.executable !== "string" || !adapter.executable) {
+      errors.push(`${path}.executable must be a non-empty string`);
+    }
+    if (!Array.isArray(adapter.args) || adapter.args.some((part) => typeof part !== "string" || !part)) {
+      errors.push(`${path}.args must be an array of non-empty strings`);
     }
     if (adapter.timeout !== undefined && (!Number.isInteger(adapter.timeout) || adapter.timeout <= 0)) {
       errors.push(`${path}.timeout must be a positive integer in milliseconds`);

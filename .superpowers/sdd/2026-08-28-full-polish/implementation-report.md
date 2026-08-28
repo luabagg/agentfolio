@@ -40,3 +40,9 @@ Final validation passed after the review correction:
 
 - The retained binding plan/spec are packaged under `docs/superpowers` and intentionally contain target-name references required to state exclusions. They are excluded from the public-code static scan under the recorded ruling.
 - Adapter execution intentionally grants collection code execution authority; users must trust collections before running plan, apply, doctor, or verify.
+
+## Follow-up: adapter executable/args contract
+
+`27f0075 fix(adapters): use executable and args declarations` replaces collection adapter `command` arrays with required `executable` and `args` fields. Schema rejects legacy `command` with no compatibility reader. Adapter execution constructs `[executable, ...args]` and continues through `runProcess` with `shell: false`; doctor checks and displays the executable declaration. The demo, scaffold guidance, public docs, fixtures, and integration tests use the new declaration.
+
+Follow-up validation passed: `npm test` (61 tests), `npm run check:dependencies`, `npm run check:secrets`, `npm run package:smoke`, and `git diff --check`.

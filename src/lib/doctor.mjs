@@ -6,13 +6,13 @@ import { resolveProfile } from "./profiles.mjs";
 import { skillsCommand } from "../backends/skills-cli.mjs";
 import { commandExists, redactText, runProcess } from "./run.mjs";
 
-function adapterCommandExists(collection, command) {
-  if (!command) return false;
-  if (isAbsolute(command)) return existsSync(command);
-  if (command.includes("/") || command.includes("\\")) {
-    return existsSync(resolve(collection.root, command));
+function adapterExecutableExists(collection, executable) {
+  if (!executable) return false;
+  if (isAbsolute(executable)) return existsSync(executable);
+  if (executable.includes("/") || executable.includes("\\")) {
+    return existsSync(resolve(collection.root, executable));
   }
-  return commandExists(command);
+  return commandExists(executable);
 }
 
 /** Health checks for native skills and selected collection adapters. */
@@ -82,13 +82,13 @@ export function runDoctor(collection = null, { profile = "default" } = {}) {
       const harness = doc.harnesses[harnessId];
       const adapter = doc.adapters[harness.adapter];
       if (!commandStatus.has(harness.adapter)) {
-        const ok = adapterCommandExists(collection, adapter.command[0]);
+        const ok = adapterExecutableExists(collection, adapter.executable);
         commandStatus.set(harness.adapter, ok);
         checks.push({
-          id: `adapter.${harness.adapter}.command`,
+          id: `adapter.${harness.adapter}.executable`,
           ok,
           required: true,
-          detail: redactText(adapter.command.join(" ")),
+          detail: redactText([adapter.executable, ...adapter.args].join(" ")),
         });
       }
       if (!commandStatus.get(harness.adapter)) continue;

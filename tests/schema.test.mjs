@@ -22,7 +22,7 @@ test("accepts collection-owned harness actions and adapters", () => {
     skills: { local: "./skills", scope: "global", agents: ["*"], copy: false },
     tools: { catalog: "./tools.json" },
     adapters: {
-      local: { command: ["node", "./scripts/adapter.mjs"], timeout: 30_000 },
+      local: { executable: "node", args: ["./scripts/adapter.mjs"], timeout: 30_000 },
     },
     harnesses: {
       terminal: {
@@ -46,7 +46,7 @@ test("rejects escaping paths and sensitive keys in every schema value", () => {
     { name: "demo", version: 1, skills: { local: "../skills" } },
     { name: "demo", version: 1, tools: { catalog: "/tmp/catalog.json" } },
     { name: "demo", version: 1, skills: { token: "[REDACTED]" } },
-    { name: "demo", version: 1, adapters: { local: { command: ["node", "./adapter.mjs"], authorization: "[REDACTED]" } } },
+    { name: "demo", version: 1, adapters: { local: { executable: "node", args: ["./adapter.mjs"], authorization: "[REDACTED]" } } },
     { name: "demo", version: 1, profiles: { default: { apiKey: "[REDACTED]" } } },
   ];
   for (const doc of docs) assert.equal(validateCollection(doc).ok, false);
@@ -67,27 +67,32 @@ test("rejects invalid skills options", () => {
   assert.ok(result.errors.some((error) => error.includes("skills.copy")));
 });
 
-test("rejects malformed adapter command and timeout", () => {
+test("requires executable and args, rejects command, and validates timeout", () => {
   const result = validateCollection({
     name: "demo",
     version: 1,
     adapters: {
-      empty: { command: [] },
-      string: { command: "node adapter.mjs" },
-      timeout: { command: ["node", "adapter.mjs"], timeout: 0 },
+      valid: { executable: "node", args: ["./adapter.mjs"], timeout: 1 },
+      emptyExecutable: { executable: "", args: [] },
+      badArgs: { executable: "node", args: [""] },
+      legacy: { command: ["node", "adapter.mjs"] },
+      timeout: { executable: "node", args: [], timeout: 0 },
     },
   });
   assert.equal(result.ok, false);
-  assert.ok(result.errors.some((error) => error.includes("adapters.empty.command")));
-  assert.ok(result.errors.some((error) => error.includes("adapters.string.command")));
+  assert.ok(result.errors.some((error) => error.includes("adapters.emptyExecutable.executable")));
+  assert.ok(result.errors.some((error) => error.includes("adapters.badArgs.args")));
+  assert.ok(result.errors.some((error) => error.includes("adapters.legacy.command is not allowed")));
+  assert.ok(result.errors.some((error) => error.includes("adapters.legacy.args")));
   assert.ok(result.errors.some((error) => error.includes("adapters.timeout.timeout")));
+  assert.equal(validateCollection({ name: "demo", version: 1, adapters: { valid: { executable: "node", args: [] } } }).ok, true);
 });
 
 test("rejects harnesses with missing adapters or malformed actions", () => {
   const result = validateCollection({
     name: "demo",
     version: 1,
-    adapters: { local: { command: ["node", "adapter.mjs"] } },
+    adapters: { local: { executable: "node", args: ["adapter.mjs"] } },
     harnesses: {
       missing: { adapter: "unknown", actions: [{ action: "setup" }] },
       empty: { adapter: "local", actions: [] },
@@ -115,7 +120,7 @@ test("accepts wildcard harness profile", () => {
   const result = validateCollection({
     name: "demo",
     version: 1,
-    adapters: { local: { command: ["node", "adapter.mjs"] } },
+    adapters: { local: { executable: "node", args: ["adapter.mjs"] } },
     harnesses: { terminal: { adapter: "local", actions: [{ action: "setup" }] } },
     profiles: { default: { skills: false, harnesses: ["*"] } },
   });

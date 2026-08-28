@@ -76,13 +76,18 @@ function validateResponse(response, operation, context) {
   }
 }
 
+/** Construct a literal argv from a validated adapter declaration. */
+export function adapterArgv(adapter) {
+  return [adapter.executable, ...adapter.args];
+}
+
 /** Execute a collection adapter with literal argv and parse one strict JSON response. */
 export function runAdapter(collection, adapterId, request) {
   const adapter = collection.doc.adapters?.[adapterId];
   if (!adapter) throw new Error(`Unknown adapter: ${adapterId}`);
   const timeout = Math.min(adapter.timeout ?? DEFAULT_ADAPTER_TIMEOUT, MAX_ADAPTER_TIMEOUT);
   const context = `${adapterId} ${request.operation} ${request.harness.id}${request.action ? `:${request.action.name}` : ""}`;
-  const result = runProcess(adapter.command, { cwd: collection.root, input: `${JSON.stringify(request)}\n`, timeout });
+  const result = runProcess(adapterArgv(adapter), { cwd: collection.root, input: `${JSON.stringify(request)}\n`, timeout });
 
   if (result.timedOut) throw new Error(`Adapter ${context} timed out after ${timeout}ms`);
   if (result.error) throw new Error(`Adapter ${context} failed to start`);

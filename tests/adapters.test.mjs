@@ -12,15 +12,15 @@ const fixtureAdapter = join(fixtures, "harness-adapter.mjs");
 
 function collection(action = "setup", timeout = 1_000, adapterArg) {
   const root = mkdtempSync(join(tmpdir(), "agentfolio-adapter-"));
-  const command = [process.execPath, fixtureAdapter];
-  if (adapterArg) command.push(adapterArg);
+  const args = [fixtureAdapter];
+  if (adapterArg) args.push(adapterArg);
   return {
     root,
     warnings: [],
     doc: {
       name: "demo",
       version: 1,
-      adapters: { fixture: { command, timeout } },
+      adapters: { fixture: { executable: process.execPath, args, timeout } },
       harnesses: { terminal: { adapter: "fixture", actions: [{ action, summary: "Fixture action", config: { value: 42 } }] } },
     },
   };
@@ -70,7 +70,7 @@ test("rejects malformed and unsafe response fields", () => {
 test("redacts configured adapter command values in plans", () => {
   const current = collection("setup", 1_000, "no-command");
   const rawValue = ["authorization", "test", "credential", "123456789012"].join("=");
-  current.doc.adapters.fixture.command.push(rawValue);
+  current.doc.adapters.fixture.args.push(rawValue);
   const output = JSON.stringify(buildPlan(current));
   assert.doesNotMatch(output, /test-credential-123456789012/);
   assert.match(output, /\[REDACTED\]/);

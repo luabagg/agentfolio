@@ -22,7 +22,8 @@ The local Skills executable is the pinned Agentfolio package dependency. `import
 ```yaml
 adapters:
   local:
-    command: [node, ./scripts/adapter.mjs]
+    executable: node
+    args: [./scripts/adapter.mjs]
     timeout: 120000
 harnesses:
   project:
@@ -36,7 +37,7 @@ profiles:
   default: { skills: true, harnesses: [project] }
 ```
 
-Adapter commands are non-empty literal argv arrays and execute without a shell from the collection root. Running one trusts collection code. An action permits `action`, optional `summary`, and optional opaque `config` mapping; Agentfolio preserves allowed configuration unchanged.
+An adapter has a non-empty `executable` string and an `args` array of non-empty strings. Agentfolio constructs literal argv as `[executable, ...args]` and executes it without a shell from the collection root. Running one trusts collection code. An action permits `action`, optional `summary`, and optional opaque `config` mapping; Agentfolio preserves allowed configuration unchanged.
 
 ## Protocol
 

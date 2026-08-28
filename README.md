@@ -25,7 +25,8 @@ Skills support uses Agentfolio's pinned local Skills CLI binary. Direct Skills i
 ```yaml
 adapters:
   local:
-    command: [node, ./scripts/adapter.mjs]
+    executable: node
+    args: [./scripts/adapter.mjs]
 ```
 
 Agentfolio executes this literal argv without a shell; running it trusts collection code. Adapters receive one protocol JSON request on stdin and return one JSON object on stdout. Agentfolio inherits normal process authentication but never discovers, stores, or prints credentials.

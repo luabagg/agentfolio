@@ -31,7 +31,7 @@ agentfolio plan
 agentfolio apply --dry-run
 \`\`\`
 
-Direct Skills installation is intentionally not documented as a floating network command.
+Direct Skills installation is intentionally not documented as a floating network command. If you add an adapter, declare its executable and args; Agentfolio runs the resulting literal argv without a shell.
 `;
 
 /** Scaffold a neutral Skills CLI collection. */

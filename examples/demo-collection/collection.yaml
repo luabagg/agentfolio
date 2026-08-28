@@ -11,7 +11,8 @@ tools:
 
 adapters:
   demo:
-    command: [node, ./scripts/demo-adapter.mjs]
+    executable: node
+    args: [./scripts/demo-adapter.mjs]
 harnesses:
   project:
     adapter: demo

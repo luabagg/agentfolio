@@ -20,7 +20,7 @@ function harnessCollection(actions = [{ action: "setup" }], profiles) {
     doc: {
       name: "harness-demo",
       version: 1,
-      adapters: { fixture: { command: [process.execPath, fixtureAdapter] } },
+      adapters: { fixture: { executable: process.execPath, args: [fixtureAdapter] } },
       harnesses: { terminal: { adapter: "fixture", actions } },
       ...(profiles ? { profiles } : {}),
     },

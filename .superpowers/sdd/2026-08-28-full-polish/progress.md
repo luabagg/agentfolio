@@ -33,3 +33,7 @@ Task 7: complete (commit 62c946d, tests node --test tests/scripts.test.mjs && np
 Ruling: dependency-policy lifecycle diagnostic remains the plan's exact `is disallowed` message; its regression assertion checks that required wording rather than the contradictory `lifecycle` substring.
 
 Task 8: complete (commit 5ca7612, tests git diff --check && npm ci --ignore-scripts && npm run check:dependencies && npm run check:secrets && npm test && npm run package:smoke)
+
+Follow-up adapter declaration migration: complete (commit 27f0075, tests npm test && npm run check:dependencies && npm run check:secrets && npm run package:smoke && git diff --check)
+
+Ruling: The approved cross-repository adapter contract supersedes the retained full-polish plan's adapter `command` declaration. This is a clean break: adapters require `executable` plus `args`; `command` is rejected rather than read as a compatibility alias. Regression coverage: schema rejects command and malformed executable/args, while adapter integration executes the internally constructed literal argv.

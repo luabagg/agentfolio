@@ -21,12 +21,12 @@ function run(args, options = {}) {
   });
 }
 
-function makeHarnessCollection(command = [node, fixtureAdapter]) {
+function makeHarnessCollection(executable = node, args = [fixtureAdapter]) {
   const root = mkdtempSync(join(tmpdir(), "agentfolio-cli-harness-"));
   writeFileSync(join(root, "collection.yaml"), JSON.stringify({
     name: "adapter-demo",
     version: 1,
-    adapters: { local: { command } },
+    adapters: { local: { executable, args } },
     harnesses: {
       terminal: {
         adapter: "local",
@@ -109,11 +109,11 @@ test("verify checks only dependencies selected by profile", () => {
 });
 
 test("doctor fails when selected adapter executable is missing", () => {
-  const root = makeHarnessCollection(["definitely-missing-agentfolio-adapter"]);
+  const root = makeHarnessCollection("definitely-missing-agentfolio-adapter", []);
   try {
     const result = run(["doctor", "--collection", root]);
     assert.notEqual(result.status, 0);
-    assert.match(result.stdout, /\[FAIL\] adapter\.local\.command/);
+    assert.match(result.stdout, /\[FAIL\] adapter\.local\.executable/);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
@@ -156,7 +156,9 @@ test("init scaffolds a neutral Skills CLI collection", () => {
     assert.equal(existsSync(join(dir, "harnesses")), false);
     assert.equal(existsSync(join(dir, "chezmoi")), false);
     const yaml = readFileSync(join(dir, "collection.yaml"), "utf8");
+    const readme = readFileSync(join(dir, "README.md"), "utf8");
     assert.match(yaml, /skills:/);
+    assert.match(readme, /executable.*args/);
     assert.doesNotMatch(yaml, /backend:|pi|cursor|chezmoi/i);
   } finally {
     rmSync(dir, { recursive: true, force: true });
