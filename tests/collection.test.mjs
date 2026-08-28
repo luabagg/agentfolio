@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { findCollectionRoot, loadCollection, listLocalSkills } from "../src/lib/collection.mjs";
+import { findCollectionRoot, loadCollection, listLocalSkills, resolveCollectionPath } from "../src/lib/collection.mjs";
 import { applyCollection } from "../src/lib/apply.mjs";
 import { buildPlan } from "../src/lib/plan.mjs";
 
@@ -31,6 +33,19 @@ test("findCollectionRoot discovers demo collection", () => {
 
 test("findCollectionRoot accepts explicit path", () => {
   assert.equal(findCollectionRoot(process.cwd(), demoRoot), demoRoot);
+});
+
+test("findCollectionRoot discovers ancestors and collection paths stay contained", () => {
+  const root = mkdtempSync(join(tmpdir(), "agentfolio-discovery-"));
+  try {
+    mkdirSync(join(root, "child"), { recursive: true });
+    writeFileSync(join(root, "collection.yaml"), "name: demo\nversion: 1\n");
+    assert.equal(findCollectionRoot(join(root, "child")), root);
+    assert.throws(() => resolveCollectionPath(root, "../escape"), /relative path/);
+    assert.throws(() => resolveCollectionPath(root, "/tmp/escape"), /relative path/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
 });
 
 test("loadCollection loads skills-only demo", () => {

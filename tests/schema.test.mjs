@@ -28,8 +28,8 @@ test("accepts collection-owned harness actions and adapters", () => {
       terminal: {
         adapter: "local",
         actions: [
-          { action: "add-plugin", source: "example" },
-          { action: "add-agents", source: "./agents" },
+          { action: "add-plugin", config: { source: "example" } },
+          { action: "add-agents", config: { source: "./agents" } },
         ],
       },
     },
@@ -39,6 +39,20 @@ test("accepts collection-owned harness actions and adapters", () => {
     },
   });
   assert.equal(result.ok, true);
+});
+
+test("rejects escaping paths and sensitive keys in every schema value", () => {
+  const docs = [
+    { name: "demo", version: 1, skills: { local: "../skills" } },
+    { name: "demo", version: 1, tools: { catalog: "/tmp/catalog.json" } },
+    { name: "demo", version: 1, skills: { token: "[REDACTED]" } },
+    { name: "demo", version: 1, adapters: { local: { command: ["node", "./adapter.mjs"], authorization: "[REDACTED]" } } },
+    { name: "demo", version: 1, profiles: { default: { apiKey: "[REDACTED]" } } },
+  ];
+  for (const doc of docs) assert.equal(validateCollection(doc).ok, false);
+  assert.ok(validateCollection(docs[0]).errors.some((error) => error.includes("skills.local")));
+  assert.ok(validateCollection(docs[1]).errors.some((error) => error.includes("tools.catalog")));
+  assert.ok(validateCollection(docs[2]).errors.some((error) => error.includes("sensitive")));
 });
 
 test("rejects invalid skills options", () => {

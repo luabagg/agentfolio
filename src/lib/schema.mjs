@@ -12,6 +12,29 @@ const ALLOWED_TOP_LEVEL = new Set([
   "profiles",
 ]);
 
+export function isSafeRelativePath(value) {
+  return typeof value === "string" && value.length > 0 && !value.startsWith("/")
+    && !value.startsWith("\\") && !value.split(/[\\/]+/).includes("..");
+}
+
+export function containsSensitiveKey(value) {
+  if (!value || typeof value !== "object") return false;
+  return Object.entries(value).some(([key, child]) =>
+    /token|secret|password|authorization|cookie|api[_-]?key|private[_-]?key|(?:^|[_-])key$/i.test(key)
+    || containsSensitiveKey(child));
+}
+
+function isMapping(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function rejectUnknownKeys(value, allowed, path, errors) {
+  if (!isMapping(value)) return;
+  for (const key of Object.keys(value)) {
+    if (!allowed.has(key)) errors.push(`${path}.${key} is not allowed`);
+  }
+}
+
 /**
  * Validate a parsed collection document.
  * @returns {{ ok: true, warnings: string[] } | { ok: false, errors: string[], warnings: string[] }}
@@ -20,9 +43,11 @@ export function validateCollection(doc) {
   const errors = [];
   const warnings = [];
 
-  if (!doc || typeof doc !== "object" || Array.isArray(doc)) {
+  if (!isMapping(doc)) {
     return { ok: false, errors: ["collection root must be a mapping"], warnings };
   }
+
+  if (containsSensitiveKey(doc)) errors.push("collection contains sensitive configuration key");
 
   for (const key of ["name", "version"]) {
     if (doc[key] === undefined || doc[key] === null || doc[key] === "") {
@@ -50,27 +75,24 @@ export function validateCollection(doc) {
   return { ok: true, warnings };
 }
 
-function isMapping(value) {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
 function validateSkills(skills, errors) {
   if (!isMapping(skills)) {
     errors.push("skills must be a mapping");
     return;
   }
-  if (skills.local !== undefined && typeof skills.local !== "string") {
+  rejectUnknownKeys(skills, new Set(["local", "imports", "scope", "agents", "copy"]), "skills", errors);
+  if (skills.local !== undefined && !isSafeRelativePath(skills.local)) {
     errors.push("skills.local must be a relative path string");
   }
-  if (skills.imports !== undefined && typeof skills.imports !== "string") {
+  if (skills.imports !== undefined && !isSafeRelativePath(skills.imports)) {
     errors.push("skills.imports must be a relative path string");
   }
   if (skills.scope !== undefined && !["global", "project"].includes(skills.scope)) {
     errors.push('skills.scope must be "global" or "project"');
   }
   if (
-    skills.agents !== undefined &&
-    (!Array.isArray(skills.agents) || skills.agents.some((agent) => typeof agent !== "string" || !agent))
+    skills.agents !== undefined
+    && (!Array.isArray(skills.agents) || skills.agents.some((agent) => typeof agent !== "string" || !agent))
   ) {
     errors.push("skills.agents must be an array of non-empty strings");
   }
@@ -84,7 +106,8 @@ function validateTools(tools, errors) {
     errors.push("tools must be a mapping");
     return;
   }
-  if (tools.catalog !== undefined && typeof tools.catalog !== "string") {
+  rejectUnknownKeys(tools, new Set(["catalog"]), "tools", errors);
+  if (tools.catalog !== undefined && !isSafeRelativePath(tools.catalog)) {
     errors.push("tools.catalog must be a relative path string");
   }
 }
@@ -102,17 +125,15 @@ function validateAdapters(adapters, errors) {
       errors.push(`${path} must be a mapping`);
       continue;
     }
+    rejectUnknownKeys(adapter, new Set(["command", "timeout"]), path, errors);
     if (
-      !Array.isArray(adapter.command) ||
-      adapter.command.length === 0 ||
-      adapter.command.some((part) => typeof part !== "string" || !part)
+      !Array.isArray(adapter.command)
+      || adapter.command.length === 0
+      || adapter.command.some((part) => typeof part !== "string" || !part)
     ) {
       errors.push(`${path}.command must be a non-empty array of non-empty strings`);
     }
-    if (
-      adapter.timeout !== undefined &&
-      (!Number.isInteger(adapter.timeout) || adapter.timeout <= 0)
-    ) {
+    if (adapter.timeout !== undefined && (!Number.isInteger(adapter.timeout) || adapter.timeout <= 0)) {
       errors.push(`${path}.timeout must be a positive integer in milliseconds`);
     }
   }
@@ -132,6 +153,7 @@ function validateHarnesses(harnesses, adapters, errors) {
       errors.push(`${path} must be a mapping`);
       continue;
     }
+    rejectUnknownKeys(harness, new Set(["adapter", "actions"]), path, errors);
     if (typeof harness.adapter !== "string" || !harness.adapter) {
       errors.push(`${path}.adapter is required`);
     } else if (!Object.hasOwn(declaredAdapters, harness.adapter)) {
@@ -147,12 +169,11 @@ function validateHarnesses(harnesses, adapters, errors) {
         errors.push(`${actionPath} must be a mapping`);
         continue;
       }
-      if (typeof action.action !== "string" || !action.action) {
-        errors.push(`${actionPath}.action is required`);
-      }
-      if (action.summary !== undefined && typeof action.summary !== "string") {
-        errors.push(`${actionPath}.summary must be a string`);
-      }
+      rejectUnknownKeys(action, new Set(["action", "summary", "config"]), actionPath, errors);
+      if (typeof action.action !== "string" || !action.action) errors.push(`${actionPath}.action is required`);
+      if (action.summary !== undefined && typeof action.summary !== "string") errors.push(`${actionPath}.summary must be a string`);
+      if (action.config !== undefined && !isMapping(action.config)) errors.push(`${actionPath}.config must be a mapping`);
+      if (action.config !== undefined && containsSensitiveKey(action.config)) errors.push(`${actionPath}.config contains sensitive configuration key`);
     }
   }
 }
@@ -170,19 +191,15 @@ function validateProfiles(profiles, harnesses, errors) {
       errors.push(`${path} must be a mapping`);
       continue;
     }
-    if (profile.skills !== undefined && typeof profile.skills !== "boolean") {
-      errors.push(`${path}.skills must be a boolean`);
-    }
+    rejectUnknownKeys(profile, new Set(["skills", "harnesses"]), path, errors);
+    if (profile.skills !== undefined && typeof profile.skills !== "boolean") errors.push(`${path}.skills must be a boolean`);
     if (profile.harnesses !== undefined && !Array.isArray(profile.harnesses)) {
       errors.push(`${path}.harnesses must be an array`);
       continue;
     }
     for (const [index, id] of (profile.harnesses ?? []).entries()) {
-      if (typeof id !== "string" || !id) {
-        errors.push(`${path}.harnesses[${index}] must be a non-empty string`);
-      } else if (id !== "*" && !Object.hasOwn(declaredHarnesses, id)) {
-        errors.push(`${path}.harnesses[${index}] unknown harness: ${JSON.stringify(id)}`);
-      }
+      if (typeof id !== "string" || !id) errors.push(`${path}.harnesses[${index}] must be a non-empty string`);
+      else if (id !== "*" && !Object.hasOwn(declaredHarnesses, id)) errors.push(`${path}.harnesses[${index}] unknown harness: ${JSON.stringify(id)}`);
     }
   }
 }

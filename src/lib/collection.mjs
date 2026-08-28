@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
-import { dirname, isAbsolute, join, resolve } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { validateCollection } from "./schema.mjs";
 
@@ -43,10 +43,15 @@ export function findCollectionRoot(startDir = process.cwd(), explicit) {
   );
 }
 
-export function resolveCollectionPath(root, relative) {
-  if (!relative) return null;
-  if (isAbsolute(relative)) return relative;
-  return resolve(root, relative);
+export function resolveCollectionPath(root, value) {
+  if (!value) return null;
+  if (isAbsolute(value)) throw new Error("collection path must be a relative path");
+  const path = resolve(root, value);
+  const pathRelative = relative(root, path);
+  if (pathRelative.startsWith("..") || isAbsolute(pathRelative)) {
+    throw new Error("collection path must be a relative path within collection root");
+  }
+  return path;
 }
 
 /**
