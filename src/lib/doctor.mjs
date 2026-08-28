@@ -3,7 +3,8 @@ import { isAbsolute, resolve } from "node:path";
 import { adapterRequest, runAdapter } from "./adapters.mjs";
 import { resolveCollectionPath } from "./collection.mjs";
 import { resolveProfile } from "./profiles.mjs";
-import { commandExists, formatCommandResult, npx, runCommand } from "./run.mjs";
+import { skillsCommand } from "../backends/skills-cli.mjs";
+import { commandExists, runProcess } from "./run.mjs";
 
 function adapterCommandExists(collection, command) {
   if (!command) return false;
@@ -23,26 +24,15 @@ export function runDoctor(collection = null, { profile = "default" } = {}) {
   const needsSkills = !collection || Boolean(resolvedProfile.skills && collection.doc.skills?.local);
 
   if (needsSkills) {
-    const npxOk = commandExists(npx) || commandExists("npx");
+    const probe = runProcess(skillsCommand(["--version"]), { timeout: 60_000 });
     checks.push({
-      id: "npx",
-      ok: npxOk,
+      id: "skills-cli",
+      ok: probe.status === 0,
       required: true,
-      detail: npxOk ? "npx available (Skills CLI via npx --yes skills)" : "npx missing",
+      detail: probe.status === 0
+        ? "Skills CLI reachable via pinned local binary"
+        : "Skills CLI probe failed",
     });
-    if (npxOk) {
-      const probe = formatCommandResult(
-        runCommand([npx, "--yes", "skills", "--help"], { timeout: 60_000 }),
-      );
-      checks.push({
-        id: "skills-cli",
-        ok: probe.status === 0,
-        required: true,
-        detail: probe.status === 0
-          ? "Skills CLI reachable via npx"
-          : `Skills CLI probe failed: ${(probe.stderr || probe.stdout || probe.error || "").slice(0, 200)}`,
-      });
-    }
   }
 
   if (collection) {

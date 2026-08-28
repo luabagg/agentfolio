@@ -15,7 +15,11 @@ export function applyCollection(
     if (action.executor === "skills-cli") {
       if (skillsApplied || !action.command) continue;
       skillsApplied = true;
-      const skillResults = applySkills(collection, { dryRun, projectRoot });
+      const skillResults = applySkills(collection, {
+        actions: plan.actions.filter((candidate) => candidate.executor === "skills-cli"),
+        dryRun,
+        projectRoot,
+      });
       results.push(...skillResults);
       if (skillResults.some((result) => result.status !== 0)) {
         return { ok: false, dryRun, profile: plan.profile.name, results };

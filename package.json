@@ -23,7 +23,8 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "yaml": "^2.9.0"
+    "yaml": "2.9.0",
+    "skills": "1.5.23"
   },
   "bin": {
     "agentfolio": "./bin/agentfolio.mjs"

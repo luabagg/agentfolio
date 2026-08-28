@@ -70,6 +70,13 @@ test("skills-only plan includes native Skills CLI action", () => {
   assert.equal(plan.actions.some((action) => action.executor === "adapter"), false);
 });
 
+test("applies the already-built skills command", () => {
+  const collection = loadCollection(demoRoot);
+  const planned = buildPlan(collection).actions.find((action) => action.executor === "skills-cli");
+  const report = applyCollection(collection, { dryRun: true });
+  assert.deepEqual(report.results.find((result) => result.executor === "skills-cli").command, planned.command);
+});
+
 test("plan invokes adapter actions in declared order", () => {
   const plan = buildPlan(harnessCollection([
     { action: "first", summary: "First" },
