@@ -1,6 +1,6 @@
 {
-  "name": "agentfolio",
-  "version": "0.1.0",
+  "name": "@luabagg/agentfolio",
+  "version": "0.1.1",
   "description": "Safely plan and apply generic agent collections",
   "directories": {
     "doc": "docs",
@@ -23,11 +23,11 @@
   "license": "MIT",
   "type": "module",
   "dependencies": {
-    "yaml": "2.9.0",
-    "skills": "1.5.23"
+    "skills": "1.5.23",
+    "yaml": "2.9.0"
   },
   "bin": {
-    "agentfolio": "./bin/agentfolio.mjs"
+    "agentfolio": "bin/agentfolio.mjs"
   },
   "engines": {
     "node": ">=20"
@@ -42,6 +42,6 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/luabagg/agentfolio.git"
+    "url": "git+https://github.com/luabagg/agentfolio.git"
   }
 }

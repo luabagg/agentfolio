@@ -29,6 +29,22 @@ A collection tracks **configuration**, not activity. Keep tasks, agent runs, tel
 
 Requires Node.js 20+.
 
+Install from npm:
+
+```sh
+npm install -g @luabagg/agentfolio
+```
+
+The same package is also on GitHub Packages. To install from there, add a `.npmrc` with the scope mapping and a token that has `read:packages`:
+
+```sh
+@luabagg:registry=https://npm.pkg.github.com
+```
+
+The command is `agentfolio` in every case.
+
+To work from source instead:
+
 ```sh
 npm install
 npm link

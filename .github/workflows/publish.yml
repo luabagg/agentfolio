@@ -1,0 +1,63 @@
+name: Publish
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - run: npm run check:dependencies
+      - run: npm run check:secrets
+      - run: npm test
+      - run: npm run package:smoke
+      - name: Verify tag matches package version
+        if: github.event_name == 'release'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p 'require("./package.json").version')"
+          test "$tag" = "$pkg" || {
+            echo "Tag $tag does not match package.json version $pkg" >&2
+            exit 1
+          }
+
+  npmjs:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      # Trusted publishing (OIDC) needs npm 11.5.1+, so Node 22.14+.
+      # No cache: release builds must not restore untrusted state.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - run: npm ci --ignore-scripts
+      # OIDC authenticates this job. Provenance is generated automatically.
+      - run: npm publish --access public
+
+  github-packages:
+    needs: verify
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          registry-url: https://npm.pkg.github.com
+          scope: '@luabagg'
+      - run: npm ci --ignore-scripts
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
