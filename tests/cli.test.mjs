@@ -51,10 +51,12 @@ test("help describes harness workflow commands", () => {
   assert.doesNotMatch(result.stdout, /setup pi|models check|catalog-only|cursor-bridge|chezmoi|\bdiff\b|\bstatus\b/i);
 });
 
-test("version prints semver", () => {
+test("version prints semver matching package.json", () => {
   const result = run(["version"]);
   assert.equal(result.status, 0);
   assert.match(result.stdout.trim(), /^\d+\.\d+\.\d+$/);
+  const pkg = JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8"));
+  assert.equal(result.stdout.trim(), pkg.version);
 });
 
 test("plan against generic demo collection", () => {

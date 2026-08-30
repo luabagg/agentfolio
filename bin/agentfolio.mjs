@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
 import { applyCollection, formatApplyText } from "../src/lib/apply.mjs";
 import { listSkillsInventory } from "../src/backends/skills-cli.mjs";
 import { initCollection } from "../src/commands/init.mjs";
@@ -14,7 +15,8 @@ import { formatDoctorText, runDoctor } from "../src/lib/doctor.mjs";
 import { buildPlan, formatPlanText } from "../src/lib/plan.mjs";
 import { resolveProfile } from "../src/lib/profiles.mjs";
 
-const VERSION = "0.1.0";
+// npm always packs package.json, so this resolves from an installed package too.
+const VERSION = createRequire(import.meta.url)("../package.json").version;
 
 function fail(message, code = 1) {
   console.error(message);
