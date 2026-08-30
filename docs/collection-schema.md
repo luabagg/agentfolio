@@ -15,7 +15,9 @@ tools:
   catalog: ./tools/catalog.json
 ```
 
-The local Skills executable is the pinned Agentfolio package dependency. `imports` is reference-only and does not install anything.
+The local Skills executable is the pinned Agentfolio package dependency. `imports` is reference-only and does not install anything. `tools.catalog` is also reference-only: it can inventory tools and skills available to agents, but it does not install or configure them.
+
+A collection tracks desired configuration, not task status, agent runs, or telemetry. Keep that activity in the systems that own it.
 
 ## Adapters and actions
 

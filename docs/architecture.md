@@ -1,6 +1,6 @@
 # Architecture
 
-Agentfolio orchestrates external collections and has no target-system knowledge.
+Agentfolio orchestrates external collections and has no target-system knowledge. A collection is a version-controlled source of truth for an agent's desired skills, tool catalog, harness workflows, adapters, and profiles—not for tasks, agent activity, or telemetry.
 
 ```text
 collection.yaml -> validation and profile selection -> plan -> apply / doctor
@@ -8,7 +8,7 @@ collection.yaml -> validation and profile selection -> plan -> apply / doctor
                     pinned Skills CLI              trusted adapters
 ```
 
-A collection owns its adapters, harness IDs, action names, and action configuration. Agentfolio owns collection discovery, strict schema validation, ordered orchestration, literal argv execution, and safe reporting.
+A collection owns its adapters, harness IDs, action names, action configuration, and reference inventory of tools and skills. Agentfolio owns collection discovery, strict schema validation, ordered orchestration, literal argv execution, and safe reporting.
 
 ## Execution flow
 

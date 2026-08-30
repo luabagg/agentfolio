@@ -1,6 +1,29 @@
 # Agentfolio
 
-Agentfolio safely plans and applies generic external collections. A collection is a directory explicitly identified by `collection.yaml`; this CLI repository is never implicitly a collection.
+Agentfolio safely plans and applies generic external collections. A collection is a version-controlled repository or folder explicitly identified by `collection.yaml`; this CLI repository is never implicitly a collection.
+
+It is designed to be used by coding agents and their operators. A collection is the source of truth for an agent's desired skills, tool catalog, harness setup, and profiles. Agentfolio validates that configuration, previews its effects, and applies it repeatably; it does not run agents or track work.
+
+```mermaid
+flowchart LR
+  A[Operator or coding agent] --> B[Version-controlled agent collection]
+  B --> C[collection.yaml]
+  C --> D[agentfolio plan / apply]
+  D --> E[Pinned Skills CLI]
+  D --> F[Collection-owned adapters]
+  E --> G[Installed skills]
+  F --> H[Harness-specific agent setup]
+```
+
+## What belongs in a collection
+
+- **Skills:** reusable instructions installed through the pinned local Skills CLI.
+- **Tool catalog:** a reference inventory of tools and skills available to agents.
+- **Harness workflows:** ordered, adapter-owned setup actions.
+- **Adapters:** trusted, collection-owned implementations of those actions.
+- **Profiles:** named subsets of skills and harnesses for an environment.
+
+A collection tracks **configuration**, not activity. Keep tasks, agent runs, telemetry, and project status in the separate systems that own them.
 
 ## Install and start
 
@@ -19,6 +42,10 @@ agentfolio apply
 Collection discovery is, in order: `--collection DIRECTORY`, `AGENTFOLIO_COLLECTION`, then the nearest ancestor that physically contains `collection.yaml`.
 
 Skills support uses Agentfolio's pinned local Skills CLI binary. Direct Skills installation is intentionally not documented as a floating network command.
+
+## When to use Agentfolio
+
+Use it when agents or a team need a repeatable, reviewable setup across one or more AI harnesses. Do not use it as an agent runtime, task tracker, or replacement for harness-specific tooling.
 
 ## Adapter boundary
 
